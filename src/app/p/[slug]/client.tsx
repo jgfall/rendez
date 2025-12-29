@@ -40,9 +40,9 @@ export function PublicProposalClient({
   const handlePayDeposit = async () => {
     setLoading(true);
     try {
-      // Check if test mode (development or query param)
-      const isTest = process.env.NODE_ENV === 'development' || 
-                     new URLSearchParams(window.location.search).get('test') === 'true';
+      // Only use test mode if explicitly requested via query param
+      // This allows testing real Stripe Checkout even in development
+      const isTest = new URLSearchParams(window.location.search).get('test') === 'true';
 
       const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
@@ -71,8 +71,8 @@ export function PublicProposalClient({
   const handlePayRemainder = async () => {
     setLoading(true);
     try {
-      const isTest = process.env.NODE_ENV === 'development' || 
-                     new URLSearchParams(window.location.search).get('test') === 'true';
+      // Only use test mode if explicitly requested via query param
+      const isTest = new URLSearchParams(window.location.search).get('test') === 'true';
 
       const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',

@@ -1,17 +1,16 @@
 import { createClient } from '@/lib/supabase/server';
-import { Card } from '@/components/ui';
+import { Card, Button } from '@/components/ui';
 import { formatPrice } from '@/lib/utils';
 import { RevenueChart } from '@/components/revenue/revenue-chart';
-import { RevenueSummary } from '@/components/revenue/revenue-summary';
+import { StripeDashboardCard } from '@/components/revenue/stripe-dashboard-card';
 import { 
   DollarSign, 
   TrendingUp, 
-  Clock, 
-  CheckCircle2,
-  ArrowLeft 
+  CreditCard,
+  ArrowLeft,
+  ExternalLink
 } from 'lucide-react';
 import Link from 'next/link';
-import { Button } from '@/components/ui';
 
 // Force dynamic rendering to ensure fresh data
 export const dynamic = 'force-dynamic';
@@ -24,14 +23,15 @@ export default async function RevenuePage() {
     return null;
   }
 
-  // Get user currency
+  // Get user currency and Stripe Connect status
   const { data: profile } = await supabase
     .from('profiles')
-    .select('currency')
+    .select('currency, stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled')
     .eq('id', user.id)
     .single();
 
   const currency = profile?.currency || 'USD';
+  const paymentsEnabled = !!(profile?.stripe_account_id && profile?.stripe_charges_enabled);
 
   // Fetch all proposals with payments
   const { data: proposals } = await supabase
@@ -48,66 +48,10 @@ export default async function RevenuePage() {
   const allDeposits = proposals?.filter(p => p.deposit_paid_at) || [];
   const allRemainders = proposals?.filter(p => p.remainder_paid_at) || [];
 
-  // Total received
+  // Total received (all-time)
   const totalDeposits = allDeposits.reduce((sum, p) => sum + (p.deposit_cents || 0), 0);
   const totalRemainders = allRemainders.reduce((sum, p) => sum + (p.remainder_cents || 0), 0);
   const totalReceived = totalDeposits + totalRemainders;
-
-  // Available funds: All deposits (paid) + Remainders from completed tours only, minus cashed out amounts
-  // Deposits can be cashed out as soon as they're paid, even if tour isn't completed
-  const allPaidDeposits = allDeposits.reduce((sum, p) => sum + (p.deposit_cents || 0), 0);
-  
-  // Remainders from completed tours (since they're paid after completion)
-  // Include tours that are marked complete with remainder_cents set
-  // Note: remainder_paid_at may not be set yet if automatic charging isn't implemented,
-  // but the remainder amount should still be available once the tour is marked complete
-  const completedTours = proposals?.filter(p => p.completed_at) || [];
-  const completedRemainders = completedTours
-    .filter(p => p.remainder_cents && p.remainder_cents > 0) // Include if remainder_cents is set
-    .reduce((sum, p) => sum + (p.remainder_cents || 0), 0);
-  const grossAvailable = allPaidDeposits + completedRemainders;
-  
-  // Get total cashed out amount (includes pending, processing, and completed payouts)
-  const { data: cashedOutResult, error: cashedOutError } = await supabase
-    .rpc('get_total_cashed_out', { guide_id_param: user.id });
-  const cashedOutAmount = cashedOutResult || 0;
-  
-  // Calculate net available (minus what's already been cashed out)
-  const availableForCashOut = Math.max(0, grossAvailable - cashedOutAmount);
-  
-  // Debug: Log calculation details (remove in production if needed)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Revenue calculation debug:', {
-      allPaidDeposits,
-      completedRemainders,
-      grossAvailable,
-      cashedOutAmount,
-      availableForCashOut,
-      proposalsCount: proposals?.length || 0,
-      depositsCount: allDeposits.length,
-    });
-  }
-
-  // Pending Revenue: Expected remainders ONLY (NOT deposits) for tours with deposit paid but NOT yet completed
-  // Deposits are immediately available in "Available for Cash Out" above
-  // This only shows the remainder amount (total - deposit) that will be charged when the tour is marked complete
-  const pendingTours = proposals?.filter(p => 
-    p.deposit_paid_at && !p.completed_at
-  ) || [];
-  
-  // Calculate expected remainders (total - deposit) for tours that haven't been completed yet
-  // NOTE: This does NOT include deposits - deposits are already in availableForCashOut above
-  const pendingRemainders = pendingTours.reduce((sum, p) => {
-    // If remainder_cents is already set, use it; otherwise calculate from total - deposit
-    if (p.remainder_cents) {
-      return sum + p.remainder_cents;
-    } else if (p.total_price_cents && p.deposit_cents) {
-      return sum + (p.total_price_cents - p.deposit_cents);
-    }
-    return sum;
-  }, 0);
-  
-  const pendingAmount = pendingRemainders;
 
   // Group by month for chart
   const monthlyData: Record<string, { deposits: number; remainders: number }> = {};
@@ -182,8 +126,32 @@ export default async function RevenuePage() {
         </div>
       </div>
 
+      {/* Stripe Connect Status */}
+      {!paymentsEnabled && (
+        <Card variant="outlined" padding="lg" className="bg-amber-50 border-amber-200">
+          <div className="flex items-start gap-4">
+            <div className="h-12 w-12 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+              <CreditCard className="h-6 w-6 text-amber-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-display text-lg font-semibold text-amber-900 mb-1">
+                Connect Stripe to Accept Payments
+              </h3>
+              <p className="text-sm text-amber-700 mb-4">
+                Funds go directly to your Stripe account. Connect your account to start receiving payments.
+              </p>
+              <Link href="/app/profile">
+                <Button variant="outline" size="sm" icon={<CreditCard className="h-4 w-4" />}>
+                  Connect Stripe
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card variant="elevated" padding="md">
           <div className="flex items-center justify-between">
             <div>
@@ -195,41 +163,6 @@ export default async function RevenuePage() {
             </div>
             <div className="h-12 w-12 rounded-xl bg-emerald-100 flex items-center justify-center">
               <DollarSign className="h-6 w-6 text-emerald-600" />
-            </div>
-          </div>
-        </Card>
-
-        <Card variant="elevated" padding="md">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm text-sand-500 mb-1">Available Now</p>
-              <p className="font-display text-2xl font-bold text-sand-900">
-                {formatPrice(availableForCashOut / 100, currency)}
-              </p>
-              <p className="text-xs text-sand-500 mt-1">Ready to cash out</p>
-              {cashedOutAmount > 0 && (
-                <p className="text-xs text-sand-400 mt-1">
-                  ({formatPrice(grossAvailable / 100, currency)} total - {formatPrice(cashedOutAmount / 100, currency)} cashed out)
-                </p>
-              )}
-            </div>
-            <div className="h-12 w-12 rounded-xl bg-ocean-100 flex items-center justify-center">
-              <CheckCircle2 className="h-6 w-6 text-ocean-600" />
-            </div>
-          </div>
-        </Card>
-
-        <Card variant="elevated" padding="md">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-sand-500 mb-1">Pending</p>
-              <p className="font-display text-2xl font-bold text-sand-900">
-                {formatPrice(pendingAmount / 100, currency)}
-              </p>
-              <p className="text-xs text-sand-500 mt-1">Expected remainders</p>
-            </div>
-            <div className="h-12 w-12 rounded-xl bg-warning-100 flex items-center justify-center">
-              <Clock className="h-6 w-6 text-warning-600" />
             </div>
           </div>
         </Card>
@@ -252,6 +185,29 @@ export default async function RevenuePage() {
             </div>
           </div>
         </Card>
+
+        {paymentsEnabled && (
+          <Card variant="elevated" padding="md">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-sm text-sand-500 mb-1">Stripe Account</p>
+                <p className="font-display text-lg font-semibold text-sand-900 mb-2">
+                  {profile?.stripe_payouts_enabled ? 'Active' : 'Pending'}
+                </p>
+                <Link 
+                  href="/api/stripe/connect/create-account-link"
+                  className="text-xs text-primary-600 hover:text-primary-700 flex items-center gap-1"
+                >
+                  Manage in Stripe
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
+              </div>
+              <div className="h-12 w-12 rounded-xl bg-ocean-100 flex items-center justify-center">
+                <CreditCard className="h-6 w-6 text-ocean-600" />
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -312,13 +268,10 @@ export default async function RevenuePage() {
         </Card>
       </div>
 
-      {/* Revenue Summary */}
-      <RevenueSummary
-        totalReceived={totalReceived}
-        availableForCashOut={availableForCashOut}
-        pendingAmount={pendingAmount}
-        currency={currency}
-      />
+      {/* Stripe Connect Info */}
+      {paymentsEnabled && (
+        <StripeDashboardCard />
+      )}
     </div>
   );
 }

@@ -24,6 +24,11 @@ export interface Database {
           phone: string | null;
           bio: string | null;
           onboarding_completed: boolean;
+          stripe_account_id: string | null;
+          stripe_details_submitted: boolean;
+          stripe_charges_enabled: boolean;
+          stripe_payouts_enabled: boolean;
+          stripe_onboarding_completed_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -39,6 +44,11 @@ export interface Database {
           phone?: string | null;
           bio?: string | null;
           onboarding_completed?: boolean;
+          stripe_account_id?: string | null;
+          stripe_details_submitted?: boolean;
+          stripe_charges_enabled?: boolean;
+          stripe_payouts_enabled?: boolean;
+          stripe_onboarding_completed_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -55,6 +65,11 @@ export interface Database {
           phone?: string | null;
           bio?: string | null;
           onboarding_completed?: boolean;
+          stripe_account_id?: string | null;
+          stripe_details_submitted?: boolean;
+          stripe_charges_enabled?: boolean;
+          stripe_payouts_enabled?: boolean;
+          stripe_onboarding_completed_at?: string | null;
           updated_at?: string;
         };
       };
@@ -235,6 +250,7 @@ export interface Database {
           stripe_payment_intent_id: string | null;
           stripe_remainder_session_id: string | null;
           stripe_remainder_payment_intent_id: string | null;
+          stripe_customer_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -258,6 +274,7 @@ export interface Database {
           stripe_payment_intent_id?: string | null;
           stripe_remainder_session_id?: string | null;
           stripe_remainder_payment_intent_id?: string | null;
+          stripe_customer_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -281,6 +298,7 @@ export interface Database {
           stripe_payment_intent_id?: string | null;
           stripe_remainder_session_id?: string | null;
           stripe_remainder_payment_intent_id?: string | null;
+          stripe_customer_id?: string | null;
           updated_at?: string;
         };
       };

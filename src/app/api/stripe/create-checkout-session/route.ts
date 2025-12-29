@@ -51,18 +51,43 @@ export async function POST(request: NextRequest) {
       remainder_paid_at: string | null;
     };
 
-    // Get guide's currency
+    // Get guide's profile with Stripe Connect info
     const { data: profile } = await supabase
       .from('profiles')
-      .select('currency')
+      .select('currency, stripe_account_id, stripe_charges_enabled')
       .eq('id', proposal.guide_id)
       .single();
 
     const currency = (profile?.currency || 'USD').toLowerCase();
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-    // TEST MODE: Bypass Stripe for testing
-    if (isTest || process.env.NODE_ENV === 'development') {
+    // Check if guide has Stripe Connect enabled
+    // Use Connect if guide has it set up (works in both test and production with appropriate Stripe keys)
+    const useConnect = profile?.stripe_account_id && profile?.stripe_charges_enabled;
+
+    // In production, require Connect for payments
+    if (process.env.NODE_ENV === 'production' && !useConnect) {
+      return NextResponse.json(
+        { error: 'Guide has not enabled payments. Please contact the guide.' },
+        { status: 400 }
+      );
+    }
+
+    // Optional platform fee (in cents)
+    // Set via env var: STRIPE_PLATFORM_FEE_PERCENT (e.g., "2.9" for 2.9%)
+    // or STRIPE_PLATFORM_FEE_FIXED_CENTS (e.g., "30" for $0.30)
+    const platformFeePercent = process.env.STRIPE_PLATFORM_FEE_PERCENT 
+      ? parseFloat(process.env.STRIPE_PLATFORM_FEE_PERCENT) 
+      : null;
+    const platformFeeFixedCents = process.env.STRIPE_PLATFORM_FEE_FIXED_CENTS
+      ? parseInt(process.env.STRIPE_PLATFORM_FEE_FIXED_CENTS)
+      : null;
+
+    // TEST MODE: Only bypass Stripe if explicitly in test mode AND guide doesn't have Connect enabled
+    // If guide has Connect enabled, always use real Stripe Checkout (even in development with test keys)
+    const shouldBypassStripe = isTest && !useConnect;
+    
+    if (shouldBypassStripe) {
       if (isRemainder) {
         // Test remainder payment
         if (proposal.remainder_paid_at) {
@@ -126,7 +151,17 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'No remainder amount set' }, { status: 400 });
       }
 
-      const session = await stripe.checkout.sessions.create({
+      // Calculate platform fee if enabled
+      let applicationFeeAmount: number | undefined;
+      if (useConnect && profile?.stripe_account_id) {
+        if (platformFeePercent) {
+          applicationFeeAmount = Math.round(proposal.remainder_cents * (platformFeePercent / 100));
+        } else if (platformFeeFixedCents) {
+          applicationFeeAmount = platformFeeFixedCents;
+        }
+      }
+
+      const sessionParams: Stripe.Checkout.SessionCreateParams = {
         payment_method_types: ['card'],
         mode: 'payment',
         line_items: [
@@ -146,11 +181,33 @@ export async function POST(request: NextRequest) {
           proposal_id: proposal.id,
           slug: proposal.slug,
           payment_type: 'remainder',
+          guide_id: proposal.guide_id,
         },
         customer_email: proposal.client?.email || undefined,
         success_url: `${appUrl}/p/${slug}/success?session_id={CHECKOUT_SESSION_ID}&remainder=true`,
         cancel_url: `${appUrl}/p/${slug}`,
-      });
+      };
+
+      // Add Connect destination and fee if enabled
+      if (useConnect && profile?.stripe_account_id) {
+        sessionParams.payment_intent_data = {
+          transfer_data: {
+            destination: profile.stripe_account_id,
+          },
+          // Save payment method for future off-session charges
+          setup_future_usage: 'off_session',
+        };
+        if (applicationFeeAmount) {
+          sessionParams.payment_intent_data.application_fee_amount = applicationFeeAmount;
+        }
+      } else {
+        // Even without Connect, save payment method for future charges
+        sessionParams.payment_intent_data = {
+          setup_future_usage: 'off_session',
+        };
+      }
+
+      const session = await stripe.checkout.sessions.create(sessionParams);
 
       return NextResponse.json({ url: session.url });
     } else {
@@ -159,7 +216,28 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Deposit already paid' }, { status: 400 });
       }
 
-    const session = await stripe.checkout.sessions.create({
+      // Calculate platform fee if enabled
+      let applicationFeeAmount: number | undefined;
+      if (useConnect && profile?.stripe_account_id) {
+        if (platformFeePercent) {
+          applicationFeeAmount = Math.round(proposal.deposit_cents * (platformFeePercent / 100));
+        } else if (platformFeeFixedCents) {
+          applicationFeeAmount = platformFeeFixedCents;
+        }
+      }
+
+      // Check if we already have a customer ID for this proposal (from previous payment attempts)
+      let existingCustomerId: string | null = null;
+      if (!isRemainder) {
+        const { data: existingProposal } = await supabase
+          .from('proposals')
+          .select('stripe_customer_id')
+          .eq('slug', slug)
+          .single();
+        existingCustomerId = existingProposal?.stripe_customer_id || null;
+      }
+
+      const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ['card'],
       mode: 'payment',
       line_items: [
@@ -179,11 +257,35 @@ export async function POST(request: NextRequest) {
         proposal_id: proposal.id,
         slug: proposal.slug,
           payment_type: 'deposit',
+          guide_id: proposal.guide_id,
       },
-      customer_email: proposal.client?.email || undefined,
+      // Use existing customer if available, otherwise use email to create one
+      customer: existingCustomerId || undefined,
+      customer_email: !existingCustomerId ? (proposal.client?.email || undefined) : undefined,
       success_url: `${appUrl}/p/${slug}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/p/${slug}`,
-    });
+      };
+
+      // Add Connect destination and fee if enabled
+      if (useConnect && profile?.stripe_account_id) {
+        sessionParams.payment_intent_data = {
+          transfer_data: {
+            destination: profile.stripe_account_id,
+          },
+          // Save payment method for future off-session charges (remainder payments)
+          setup_future_usage: 'off_session',
+        };
+        if (applicationFeeAmount) {
+          sessionParams.payment_intent_data.application_fee_amount = applicationFeeAmount;
+        }
+      } else {
+        // Even without Connect, save payment method for future charges
+        sessionParams.payment_intent_data = {
+          setup_future_usage: 'off_session',
+        };
+      }
+
+      const session = await stripe.checkout.sessions.create(sessionParams);
 
     return NextResponse.json({ url: session.url });
     }

@@ -58,14 +58,30 @@ export function CompleteActions({
       });
 
       if (!response.ok) {
-        throw new Error('Failed to mark tour complete');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to mark tour complete');
       }
 
-      // Show confetti and success state
-      setShowConfetti(true);
-      setShowSuccess(true);
-      // Refresh to get updated data
-      router.refresh();
+      const data = await response.json();
+
+      // If remainder was automatically charged, show success
+      if (data.remainderCharged) {
+        // Remainder was charged automatically - great!
+        setShowConfetti(true);
+        setShowSuccess(true);
+        router.refresh();
+      } else if (data.checkoutUrl) {
+        // Fallback: Open checkout in new tab for client to pay
+        window.open(data.checkoutUrl, '_blank');
+        setShowConfetti(true);
+        setShowSuccess(true);
+        router.refresh();
+      } else {
+        // No remainder or already paid
+        setShowConfetti(true);
+        setShowSuccess(true);
+        router.refresh();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to mark complete');
       setLoading(false);
@@ -95,9 +111,26 @@ export function CompleteActions({
             <h2 className="font-display text-2xl font-bold text-emerald-900 mb-3">
               Tour Completed! 🎉
             </h2>
-            <p className="text-sand-700 mb-6">
-              The remainder payment of {formatPrice(displayRemainder, currency)} will be charged to the card on file.
-            </p>
+            {displayRemainder > 0 && !remainderPaidAt && (
+              <div className="mb-6 p-4 rounded-xl bg-warning-50 border border-warning-200">
+                <p className="text-warning-700 mb-2">
+                  ⚠️ Remainder payment of {formatPrice(displayRemainder, currency)} could not be charged automatically.
+                </p>
+                <p className="text-sm text-warning-600">
+                  A payment link has been opened in a new tab. Share this with your client to collect the remaining balance.
+                </p>
+              </div>
+            )}
+            {remainderPaidAt && (
+              <p className="text-sand-700 mb-6">
+                ✅ Remainder payment of {formatPrice(displayRemainder, currency)} has been received.
+              </p>
+            )}
+            {displayRemainder === 0 && (
+              <p className="text-sand-700 mb-6">
+                Tour is fully paid. No remainder payment needed.
+              </p>
+            )}
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link href="/app">
                 <Button variant="outline" icon={<LayoutDashboard className="h-4 w-4" />}>

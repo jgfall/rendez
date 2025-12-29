@@ -18,6 +18,121 @@ export default async function SuccessPage({ params, searchParams }: PageProps) {
   const { session_id, remainder, test } = await searchParams;
   const supabase = await createClient();
 
+  // If we have a session_id and it's not a test, verify payment and update if needed
+  // This handles cases where the webhook hasn't processed yet
+  if (session_id && !test && session_id !== 'test_deposit' && session_id !== 'test_remainder') {
+    try {
+      const stripe = (await import('stripe')).default;
+      const { createClient: createSupabaseClient } = await import('@supabase/supabase-js');
+      const stripeClient = new stripe(process.env.STRIPE_SECRET_KEY!);
+      
+      // Use service role for database updates (bypasses RLS)
+      const supabaseAdmin = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { auth: { persistSession: false } }
+      );
+      
+      // Retrieve the checkout session
+      const session = await stripeClient.checkout.sessions.retrieve(session_id as string);
+      
+      console.log('[SUCCESS PAGE] Verifying payment:', {
+        session_id: session.id,
+        payment_status: session.payment_status,
+        metadata: session.metadata,
+      });
+      
+      if (session.payment_status === 'paid' && session.metadata?.proposal_id) {
+        const proposalId = session.metadata.proposal_id;
+        const paymentType = session.metadata.payment_type || 'deposit';
+        
+        // Check if already updated (idempotency)
+        const { data: existingProposal } = await supabaseAdmin
+          .from('proposals')
+          .select(paymentType === 'remainder' ? 'remainder_paid_at' : 'deposit_paid_at')
+          .eq('id', proposalId)
+          .single();
+        
+        const alreadyPaid = paymentType === 'remainder' 
+          ? existingProposal?.remainder_paid_at 
+          : existingProposal?.deposit_paid_at;
+        
+        if (!alreadyPaid) {
+          console.log(`[SUCCESS PAGE] Updating ${paymentType} payment for proposal ${proposalId}`);
+          
+          // Update the proposal directly (webhook might not have fired yet)
+          if (paymentType === 'remainder') {
+            const { error: updateError } = await supabaseAdmin
+              .from('proposals')
+              .update({
+                remainder_paid_at: new Date().toISOString(),
+                stripe_remainder_session_id: session.id,
+                stripe_remainder_payment_intent_id: session.payment_intent as string || null,
+              })
+              .eq('id', proposalId);
+            
+            if (updateError) {
+              console.error('[SUCCESS PAGE] Error updating remainder:', updateError);
+            } else {
+              console.log(`[SUCCESS PAGE] Successfully updated remainder payment for proposal ${proposalId}`);
+            }
+          } else {
+            // Get customer ID from payment intent
+            let customerId: string | null = null;
+            if (session.payment_intent) {
+              try {
+                const paymentIntent = await stripeClient.paymentIntents.retrieve(
+                  session.payment_intent as string
+                );
+                customerId = paymentIntent.customer as string | null;
+                console.log(`[SUCCESS PAGE] Retrieved customer ID: ${customerId}`);
+              } catch (err) {
+                console.error('[SUCCESS PAGE] Error retrieving customer ID:', err);
+              }
+            } else if (session.customer) {
+              customerId = session.customer as string;
+              console.log(`[SUCCESS PAGE] Using customer ID from session: ${customerId}`);
+            }
+            
+            // Build update object - only include stripe_customer_id if we have it
+            const updateData: any = {
+              deposit_paid_at: new Date().toISOString(),
+              status: 'deposit_paid',
+              stripe_checkout_session_id: session.id,
+              stripe_payment_intent_id: session.payment_intent as string || null,
+            };
+            
+            // Only add stripe_customer_id if customerId exists (and column exists)
+            if (customerId) {
+              updateData.stripe_customer_id = customerId;
+            }
+            
+            const { error: updateError } = await supabaseAdmin
+              .from('proposals')
+              .update(updateData)
+              .eq('id', proposalId);
+            
+            if (updateError) {
+              console.error('[SUCCESS PAGE] Error updating deposit:', updateError);
+            } else {
+              console.log(`[SUCCESS PAGE] Successfully updated deposit payment for proposal ${proposalId}`);
+            }
+          }
+        } else {
+          console.log(`[SUCCESS PAGE] Payment already recorded for proposal ${proposalId}`);
+        }
+      } else {
+        console.log('[SUCCESS PAGE] Payment not completed or missing metadata:', {
+          payment_status: session.payment_status,
+          has_metadata: !!session.metadata,
+        });
+      }
+    } catch (err) {
+      console.error('[SUCCESS PAGE] Error verifying payment:', err);
+      // Don't fail the page if verification fails - webhook will handle it
+    }
+  }
+
   // Fetch proposal to verify it exists and is paid
   const { data, error } = await supabase
     .rpc('get_public_proposal_by_slug', { slug_param: slug });

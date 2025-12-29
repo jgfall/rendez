@@ -12,22 +12,66 @@ export default async function PublicProposalPage({ params }: PageProps) {
   const { slug } = await params;
   const supabase = await createClient();
 
-  // Fetch proposal via RPC (server-side sanitization)
-  const { data, error } = await supabase
-    .rpc('get_public_proposal_by_slug', { slug_param: slug });
+  // First, check if proposal exists directly (for debugging)
+  const { data: proposalExists } = await supabase
+    .from('proposals')
+    .select('id, slug')
+    .eq('slug', slug)
+    .single();
 
-  if (error || !data) {
+  if (!proposalExists) {
+    console.error(`[DEBUG] Proposal with slug "${slug}" does not exist in database`);
+    notFound();
+  }
+
+  // Fetch proposal via RPC (server-side sanitization)
+  let data, error;
+  try {
+    const result = await supabase
+      .rpc('get_public_proposal_by_slug', { slug_param: slug });
+    data = result.data;
+    error = result.error;
+  } catch (err) {
+    console.error('[DEBUG] Exception calling RPC:', err);
+    error = err as any;
+  }
+
+  if (error) {
+    console.error('[DEBUG] RPC Error fetching proposal:', {
+      error,
+      message: error?.message,
+      details: error?.details,
+      hint: error?.hint,
+      code: error?.code,
+      slug,
+    });
+    // Try to check if function exists
+    const { data: funcCheck } = await supabase
+      .rpc('get_public_proposal_by_slug', { slug_param: 'test' })
+      .then(() => ({ data: 'function_exists' }))
+      .catch(() => ({ data: 'function_missing' }));
+    console.error('[DEBUG] Function check:', funcCheck);
+    notFound();
+  }
+
+  if (!data) {
+    console.error(`[DEBUG] RPC returned NULL for slug: "${slug}" (proposal exists but RPC failed)`);
+    console.error('[DEBUG] Proposal exists check:', proposalExists);
     notFound();
   }
 
   const proposal = data as PublicProposal;
 
   // Also fetch remainder payment info and guide_id (not in RPC for security)
-  const { data: proposalData } = await supabase
+  const { data: proposalData, error: proposalError } = await supabase
     .from('proposals')
     .select('remainder_cents, remainder_paid_at, guide_id, scheduled_at')
     .eq('slug', slug)
     .single();
+
+  if (proposalError) {
+    console.error('Error fetching proposal data:', proposalError);
+  }
 
   // Track view (will be called from client component)
   return (

@@ -176,9 +176,32 @@ export default async function ProposalDetailPage({ params }: PageProps) {
               {formatPrice(proposal.deposit_cents / 100, currency)} received on{' '}
               {format(new Date(proposal.deposit_paid_at), 'MMMM d, yyyy h:mm a')}
             </p>
+            <p className="text-sm text-emerald-600 mt-2">
+              Payment processed via Stripe Connect. Funds go directly to your Stripe account.
+            </p>
             {proposal.stripe_payment_intent_id && (
-              <p className="text-sm text-emerald-600 mt-2">
-                Stripe Payment ID: {proposal.stripe_payment_intent_id}
+              <p className="text-xs text-emerald-500 mt-1 font-mono">
+                Payment ID: {proposal.stripe_payment_intent_id}
+              </p>
+            )}
+          </Card>
+        )}
+
+        {proposal.remainder_paid_at && (
+          <Card variant="elevated" padding="lg" className="lg:col-span-2 bg-emerald-50 border-emerald-200">
+            <h2 className="font-display text-xl font-semibold text-emerald-900 mb-2">
+              ✅ Remainder Paid
+            </h2>
+            <p className="text-emerald-700">
+              {formatPrice((proposal.remainder_cents || 0) / 100, currency)} received on{' '}
+              {format(new Date(proposal.remainder_paid_at), 'MMMM d, yyyy h:mm a')}
+            </p>
+            <p className="text-sm text-emerald-600 mt-2">
+              Payment processed via Stripe Connect. Funds go directly to your Stripe account.
+            </p>
+            {proposal.stripe_remainder_payment_intent_id && (
+              <p className="text-xs text-emerald-500 mt-1 font-mono">
+                Payment ID: {proposal.stripe_remainder_payment_intent_id}
               </p>
             )}
           </Card>

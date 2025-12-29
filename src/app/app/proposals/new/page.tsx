@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Copy, MessageCircle, Check, Link as LinkIcon, Edit2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Copy, MessageCircle, Check, Link as LinkIcon, Edit2, ChevronDown, ChevronUp, AlertCircle, CreditCard } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { createClient } from '@/lib/supabase/client';
 import { Button, Input, Textarea, Select, Card, Badge, CalendarWithTimePresets } from '@/components/ui';
@@ -50,15 +50,18 @@ export default function NewProposalPage() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
 
+  // Payment status
+  const [paymentsEnabled, setPaymentsEnabled] = useState(false);
+
   useEffect(() => {
     const fetchTours = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Get user profile for currency and deposit percentage
+      // Get user profile for currency, deposit percentage, and payment status
       const { data: profile } = await supabase
         .from('profiles')
-        .select('currency, deposit_percentage')
+        .select('currency, deposit_percentage, stripe_account_id, stripe_charges_enabled')
         .eq('id', user.id)
         .single();
       
@@ -69,6 +72,11 @@ export default function NewProposalPage() {
       if (profile?.deposit_percentage !== undefined) {
         setDepositPercentage(profile.deposit_percentage);
       }
+
+      // Check if payments are enabled
+      setPaymentsEnabled(
+        !!(profile?.stripe_account_id && profile?.stripe_charges_enabled)
+      );
 
       const { data } = await supabase
         .from('tour_templates')
@@ -729,6 +737,36 @@ export default function NewProposalPage() {
             <h2 className="font-display text-xl font-semibold text-sand-900 mb-4">
               Pricing ({currency})
             </h2>
+            {!paymentsEnabled && (
+              <div className="mb-4 p-4 rounded-xl bg-amber-50 border border-amber-200">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-amber-900 mb-1">
+                      Payments Not Enabled
+                    </p>
+                    <p className="text-sm text-amber-700 mb-3">
+                      Connect Stripe to accept deposits. Guests won't be able to pay until you enable payments.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push('/app/profile')}
+                      icon={<CreditCard className="h-4 w-4" />}
+                    >
+                      Connect Stripe
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {paymentsEnabled && (
+              <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-700">
+                <p className="font-medium">✓ Payments enabled</p>
+                <p className="text-xs mt-1">Deposit collected by Stripe. Funds go directly to you.</p>
+              </div>
+            )}
             {selectedTour?.base_price_cents && (
               <div className="mb-4 p-3 rounded-xl bg-primary-50 border border-primary-200 text-sm text-primary-700">
                 <p className="font-medium mb-1">Auto-calculated from tour template</p>

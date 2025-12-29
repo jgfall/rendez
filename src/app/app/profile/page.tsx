@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Save, User, Building2, Upload, Camera, X, ChevronDown, ChevronUp, Plus } from 'lucide-react';
+import { Save, User, Building2, Upload, Camera, X, ChevronDown, ChevronUp, Plus, CreditCard, CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Button, Input, Textarea, Select, Card, ImageUpload, ProfilePhotoUpload } from '@/components/ui';
 import type { Profile } from '@/types/database';
@@ -72,6 +72,13 @@ export default function ProfilePage() {
   const [showBusinessBranding, setShowBusinessBranding] = useState(false);
   const profilePhotoInputRef = useRef<HTMLInputElement>(null);
 
+  // Stripe Connect state
+  const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
+  const [stripeChargesEnabled, setStripeChargesEnabled] = useState(false);
+  const [stripePayoutsEnabled, setStripePayoutsEnabled] = useState(false);
+  const [stripeDetailsSubmitted, setStripeDetailsSubmitted] = useState(false);
+  const [connectingStripe, setConnectingStripe] = useState(false);
+
   useEffect(() => {
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -99,6 +106,11 @@ export default function ProfilePage() {
         setShowBusinessBranding(
           !!(profile.business_name || profile.logo_url || profile.bio)
         );
+        // Stripe Connect status
+        setStripeAccountId(profile.stripe_account_id || null);
+        setStripeChargesEnabled(profile.stripe_charges_enabled || false);
+        setStripePayoutsEnabled(profile.stripe_payouts_enabled || false);
+        setStripeDetailsSubmitted(profile.stripe_details_submitted || false);
       }
 
       setLoading(false);
@@ -209,6 +221,110 @@ export default function ProfilePage() {
       setSaving(false);
     }
   };
+
+  const handleConnectStripe = async () => {
+    setConnectingStripe(true);
+    setError(null);
+
+    try {
+      // Step 1: Create or get Stripe account
+      const createAccountRes = await fetch('/api/stripe/connect/create-account', {
+        method: 'POST',
+      });
+
+      if (!createAccountRes.ok) {
+        const errorData = await createAccountRes.json();
+        throw new Error(errorData.error || 'Failed to create Stripe account');
+      }
+
+      const { stripe_account_id } = await createAccountRes.json();
+
+      // Step 2: Create account link for onboarding
+      const returnUrl = `${window.location.origin}/app/profile?stripe_return=true`;
+      const refreshUrl = `${window.location.origin}/app/profile?stripe_refresh=true`;
+
+      const createLinkRes = await fetch('/api/stripe/connect/create-account-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ return_url: returnUrl, refresh_url: refreshUrl }),
+      });
+
+      if (!createLinkRes.ok) {
+        const errorData = await createLinkRes.json();
+        throw new Error(errorData.error || 'Failed to create account link');
+      }
+
+      const { url } = await createLinkRes.json();
+
+      // Redirect to Stripe onboarding
+      window.location.href = url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to connect Stripe');
+      setConnectingStripe(false);
+    }
+  };
+
+  const handleManageStripe = async () => {
+    if (!stripeAccountId) return;
+
+    setConnectingStripe(true);
+    setError(null);
+
+    try {
+      // Create account link for dashboard access
+      const returnUrl = `${window.location.origin}/app/profile?stripe_return=true`;
+      const refreshUrl = `${window.location.origin}/app/profile?stripe_refresh=true`;
+
+      const createLinkRes = await fetch('/api/stripe/connect/create-account-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ return_url: returnUrl, refresh_url: refreshUrl }),
+      });
+
+      if (!createLinkRes.ok) {
+        const errorData = await createLinkRes.json();
+        throw new Error(errorData.error || 'Failed to create account link');
+      }
+
+      const { url } = await createLinkRes.json();
+      window.location.href = url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to open Stripe dashboard');
+      setConnectingStripe(false);
+    }
+  };
+
+  // Check for Stripe return/refresh params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('stripe_return') || params.get('stripe_refresh')) {
+      // Refresh profile data to get updated Stripe status
+      const fetchProfile = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted')
+          .eq('id', user.id)
+          .single();
+
+        if (profile) {
+          setStripeAccountId(profile.stripe_account_id || null);
+          setStripeChargesEnabled(profile.stripe_charges_enabled || false);
+          setStripePayoutsEnabled(profile.stripe_payouts_enabled || false);
+          setStripeDetailsSubmitted(profile.stripe_details_submitted || false);
+        }
+
+        // Clean up URL
+        window.history.replaceState({}, '', '/app/profile');
+      };
+
+      fetchProfile();
+    }
+  }, [supabase]);
+
+  const paymentsEnabled = stripeAccountId && stripeChargesEnabled;
 
   if (loading) {
     return (
@@ -415,6 +531,94 @@ export default function ProfilePage() {
               rows={3}
               hint="Optional - displayed on your public proposals"
             />
+            </div>
+          )}
+        </Card>
+
+        {/* Payments */}
+        <Card variant="elevated" padding="lg">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+              <CreditCard className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h2 className="font-display text-xl font-light text-sand-900">
+                Payments
+              </h2>
+              <p className="text-sm text-sand-500">Accept deposits directly to your Stripe account</p>
+            </div>
+          </div>
+
+          {!paymentsEnabled ? (
+            <div className="space-y-4">
+              {!stripeAccountId ? (
+                <>
+                  <p className="text-sm text-sand-600">
+                    Connect your Stripe account to accept deposits. Guests pay directly to your account—Rendez never holds funds.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={handleConnectStripe}
+                    loading={connectingStripe}
+                    icon={<CreditCard className="h-4 w-4" />}
+                  >
+                    Connect Stripe
+                  </Button>
+                </>
+              ) : !stripeChargesEnabled ? (
+                <>
+                  <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-amber-900 mb-1">
+                          Finish Stripe Setup
+                        </p>
+                        <p className="text-sm text-amber-700">
+                          {stripeDetailsSubmitted
+                            ? 'Stripe needs a few more details to enable payments.'
+                            : 'Complete your Stripe onboarding to start accepting payments.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={handleManageStripe}
+                    loading={connectingStripe}
+                    icon={<ExternalLink className="h-4 w-4" />}
+                  >
+                    Finish Stripe Setup
+                  </Button>
+                </>
+              ) : null}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-emerald-900 mb-1">
+                      Payments Enabled
+                    </p>
+                    <p className="text-sm text-emerald-700">
+                      You can accept deposits. Funds go directly to your Stripe account.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleManageStripe}
+                  loading={connectingStripe}
+                  icon={<ExternalLink className="h-4 w-4" />}
+                >
+                  Manage in Stripe
+                </Button>
+              </div>
             </div>
           )}
         </Card>
