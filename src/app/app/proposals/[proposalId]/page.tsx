@@ -219,7 +219,6 @@ export default async function ProposalDetailPage({ params }: PageProps) {
             depositCents={proposal.deposit_cents}
             currency={currency}
             clientName={proposal.client?.name}
-            remainderAmount={proposal.remainder_cents ? proposal.remainder_cents / 100 : undefined}
           />
         </div>
 

@@ -80,7 +80,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ received: true, skipped: 'no_subscription_id' });
       }
 
-      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      const subscriptionResponse = await stripe.subscriptions.retrieve(subscriptionId);
+      const subscription = subscriptionResponse as any;
       
       // Update user's subscription status
       const { error } = await supabaseAdmin
@@ -88,8 +89,10 @@ export async function POST(request: NextRequest) {
         .update({
           subscription_plan: 'pro',
           stripe_subscription_id: subscriptionId,
-          subscription_status: subscription.status as any,
-          subscription_current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+          subscription_status: subscription.status,
+          subscription_current_period_end: subscription.current_period_end 
+            ? new Date(subscription.current_period_end * 1000).toISOString()
+            : null,
           subscription_cancel_at_period_end: subscription.cancel_at_period_end ? true : false,
         })
         .eq('id', userId);
@@ -214,7 +217,7 @@ export async function POST(request: NextRequest) {
     }
   } else if (event.type === 'customer.subscription.created' || event.type === 'customer.subscription.updated') {
     // Handle subscription created/updated
-    const subscription = event.data.object as Stripe.Subscription;
+    const subscription = event.data.object as any;
     const userId = subscription.metadata?.user_id;
 
     if (!userId) {
@@ -234,8 +237,10 @@ export async function POST(request: NextRequest) {
       .update({
         subscription_plan: 'pro',
         stripe_subscription_id: subscription.id,
-        subscription_status: subscription.status as any,
-        subscription_current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+        subscription_status: subscription.status,
+        subscription_current_period_end: subscription.current_period_end 
+          ? new Date(subscription.current_period_end * 1000).toISOString()
+          : null,
         subscription_cancel_at_period_end: subscription.cancel_at_period_end ? true : false,
       })
       .eq('id', userId);

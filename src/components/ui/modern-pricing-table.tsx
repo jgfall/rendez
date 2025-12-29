@@ -288,7 +288,7 @@ const PricingTable: React.FC<PricingTableProps> = ({ plans, showHeader = true, s
                 >
                   {onSelectPlan ? (
                     <Button
-                      onClick={() => onSelectPlan(plan.title.toLowerCase(), isYearly ? 'yearly' : 'monthly')}
+                      onClick={() => onSelectPlan(plan.title.toLowerCase() as "free" | "pro", isYearly ? 'yearly' : 'monthly')}
                       variant={plan.isFeatured ? "primary" : "outline"}
                       size="lg"
                       className="w-full"

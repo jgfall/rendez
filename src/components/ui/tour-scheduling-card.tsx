@@ -107,7 +107,7 @@ export function TourSchedulingCard({
     },
   };
 
-  const itemVariants = {
+  const itemVariants: any = {
     hidden: {
       opacity: 0,
       x: -25,
@@ -128,7 +128,7 @@ export function TourSchedulingCard({
     },
   };
 
-  const timeSlotVariants = {
+  const timeSlotVariants: any = {
     hidden: { opacity: 0, scale: 0.8 },
     visible: {
       opacity: 1,

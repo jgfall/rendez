@@ -10,7 +10,7 @@ import type { CalendarEvent } from '@/lib/calendar';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ session_id?: string }>;
+  searchParams: Promise<{ session_id?: string; remainder?: string; test?: string }>;
 }
 
 export default async function SuccessPage({ params, searchParams }: PageProps) {
@@ -49,7 +49,7 @@ export default async function SuccessPage({ params, searchParams }: PageProps) {
         // Check if already updated (idempotency)
         const { data: existingProposal } = await supabaseAdmin
           .from('proposals')
-          .select(paymentType === 'remainder' ? 'remainder_paid_at' : 'deposit_paid_at')
+          .select('remainder_paid_at, deposit_paid_at')
           .eq('id', proposalId)
           .single();
         

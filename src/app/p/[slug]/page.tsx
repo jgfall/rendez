@@ -46,10 +46,13 @@ export default async function PublicProposalPage({ params }: PageProps) {
       slug,
     });
     // Try to check if function exists
-    const { data: funcCheck } = await supabase
-      .rpc('get_public_proposal_by_slug', { slug_param: 'test' })
-      .then(() => ({ data: 'function_exists' }))
-      .catch(() => ({ data: 'function_missing' }));
+    let funcCheck;
+    try {
+      await supabase.rpc('get_public_proposal_by_slug', { slug_param: 'test' });
+      funcCheck = { data: 'function_exists' };
+    } catch {
+      funcCheck = { data: 'function_missing' };
+    }
     console.error('[DEBUG] Function check:', funcCheck);
     notFound();
   }
