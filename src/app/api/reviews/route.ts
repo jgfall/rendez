@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       .insert({
         proposal_id,
         guide_id: proposal.guide_id,
-        client_id: proposal.client.id,
+        client_id: Array.isArray(proposal.client) ? proposal.client[0]?.id : proposal.client?.id,
         rating,
         comment: comment?.trim() || null,
       })
