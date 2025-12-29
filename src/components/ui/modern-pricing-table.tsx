@@ -24,6 +24,7 @@ interface PricingTableProps {
   plans: Plan[]
   showHeader?: boolean
   showCTA?: boolean
+  onSelectPlan?: (plan: "free" | "pro", billingPeriod: "monthly" | "yearly") => Promise<void> | void
 }
 
 // Individual Digit Animation Component
