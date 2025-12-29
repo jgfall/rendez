@@ -67,13 +67,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Extract client ID - handle both array and object cases
+    const clientId = Array.isArray(proposal.client) 
+      ? (proposal.client[0] as { id: string } | undefined)?.id
+      : (proposal.client as { id: string } | undefined)?.id;
+
+    if (!clientId) {
+      return NextResponse.json(
+        { error: 'Client not found for this proposal' },
+        { status: 404 }
+      );
+    }
+
     // Create review
     const { data: review, error: reviewError } = await supabase
       .from('reviews')
       .insert({
         proposal_id,
         guide_id: proposal.guide_id,
-        client_id: Array.isArray(proposal.client) ? proposal.client[0]?.id : proposal.client?.id,
+        client_id: clientId,
         rating,
         comment: comment?.trim() || null,
       })
