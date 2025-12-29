@@ -34,8 +34,10 @@ import { Time, parseTime } from '@internationalized/date';
 import { SortableBlock } from './block-editor';
 import { BlockCreateModal } from './block-create-modal';
 import { ProposalRenderer } from '@/components/proposal/proposal-renderer';
+import { UpgradeModal } from '@/components/subscriptions/upgrade-modal';
 import { formatPrice } from '@/lib/utils';
-import type { TourTemplate, TourBlock, BlockType, BlockVisibility, PriceMode } from '@/types/database';
+import { canCreateTourTemplate, isSubscriptionActive, getPlanLimits } from '@/lib/subscriptions';
+import type { TourTemplate, TourBlock, BlockType, BlockVisibility, PriceMode, SubscriptionPlan } from '@/types/database';
 
 interface TourEditorProps {
   tour?: TourTemplate;
@@ -72,24 +74,46 @@ export function TourEditor({ tour, blocks = [] }: TourEditorProps) {
   const supabase = createClient();
   const isNew = !tour;
 
-  // Fetch currency from profile
+  // Subscription and profile state
+  const [subscriptionPlan, setSubscriptionPlan] = useState<SubscriptionPlan>('free');
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
+  const [tourCount, setTourCount] = useState(0);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
+  // Fetch currency and subscription from profile
   useEffect(() => {
-    const fetchCurrency = async () => {
+    const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('currency')
+        .select('currency, subscription_plan, subscription_status')
         .eq('id', user.id)
         .single();
 
-      if (profile?.currency) {
+      if (profile) {
+        if (profile.currency) {
         setCurrency(profile.currency);
       }
+        if (profile.subscription_plan) {
+          setSubscriptionPlan(profile.subscription_plan);
+        }
+        if (profile.subscription_status) {
+          setSubscriptionStatus(profile.subscription_status);
+        }
+      }
+
+      // Get tour count
+      const { count } = await supabase
+        .from('tour_templates')
+        .select('*', { count: 'exact', head: true })
+        .eq('guide_id', user.id);
+
+      setTourCount(count || 0);
     };
 
-    fetchCurrency();
+    fetchProfile();
   }, [supabase]);
 
   // Tour state
@@ -270,6 +294,17 @@ export function TourEditor({ tour, blocks = [] }: TourEditorProps) {
       // Calculate duration from blocks
       const calculatedDuration = calculateTotalDuration();
 
+      // Check subscription limits before creating new tour
+      if (isNew) {
+        const canCreate = canCreateTourTemplate(subscriptionPlan, tourCount);
+        
+        if (!canCreate) {
+          setShowUpgradeModal(true);
+          setSaving(false);
+          return;
+        }
+      }
+
       // Create or update tour
       if (isNew) {
         const { data: newTour, error: tourError } = await supabase
@@ -416,7 +451,15 @@ export function TourEditor({ tour, blocks = [] }: TourEditorProps) {
       cover_image_url: coverImageUrl,
     },
     client: { name: 'Preview Client' },
-    guide: { full_name: 'You' },
+    guide: { 
+      full_name: 'You',
+      business_name: null,
+      logo_url: null,
+      profile_photo_url: null,
+      bio: null,
+      average_rating: null,
+      review_count: null,
+    },
     blocks: activeBlocks.map(b => {
       const hideUntilDeposit = (b as any).hide_until_deposit || false;
       const isBeforeDeposit = previewMode === 'before';
@@ -606,7 +649,7 @@ export function TourEditor({ tour, blocks = [] }: TourEditorProps) {
               <ImageUpload
                 label="Cover Image"
                 value={coverImageUrl}
-                onChange={setCoverImageUrl}
+                onChange={(url) => setCoverImageUrl(url || '')}
                 folder="tours"
                 hint="Upload a cover image for your tour (or enter a URL)"
               />
@@ -750,6 +793,12 @@ export function TourEditor({ tour, blocks = [] }: TourEditorProps) {
         onSave={handleBlockCreated}
         sortOrder={localBlocks.length}
         previousBlockEndTime={getPreviousBlockEndTime()}
+      />
+
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        reason="Free plans are limited to 1 tour template. Upgrade to Pro for unlimited templates."
       />
     </div>
   );

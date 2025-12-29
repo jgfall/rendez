@@ -78,9 +78,9 @@ export function CompleteActions({
         router.refresh();
       } else {
         // No remainder or already paid
-        setShowConfetti(true);
-        setShowSuccess(true);
-        router.refresh();
+      setShowConfetti(true);
+      setShowSuccess(true);
+      router.refresh();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to mark complete');

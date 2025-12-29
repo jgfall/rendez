@@ -59,11 +59,51 @@ export async function POST(request: NextRequest) {
     
     console.log('[WEBHOOK] checkout.session.completed received:', {
       session_id: session.id,
+      mode: session.mode,
       metadata: session.metadata,
       payment_status: session.payment_status,
-      payment_intent: session.payment_intent,
     });
     
+    // Handle subscription checkout
+    if (session.mode === 'subscription') {
+      const userId = session.metadata?.user_id;
+
+      if (!userId) {
+        console.error('[WEBHOOK] No user_id in subscription session metadata');
+        return NextResponse.json({ received: true, skipped: 'no_user_id' });
+      }
+
+      // Get subscription details
+      const subscriptionId = session.subscription as string;
+      if (!subscriptionId) {
+        console.error('[WEBHOOK] No subscription ID in checkout session');
+        return NextResponse.json({ received: true, skipped: 'no_subscription_id' });
+      }
+
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      
+      // Update user's subscription status
+      const { error } = await supabaseAdmin
+        .from('profiles')
+        .update({
+          subscription_plan: 'pro',
+          stripe_subscription_id: subscriptionId,
+          subscription_status: subscription.status as any,
+          subscription_current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+          subscription_cancel_at_period_end: subscription.cancel_at_period_end ? true : false,
+        })
+        .eq('id', userId);
+
+      if (error) {
+        console.error('[WEBHOOK] Error updating subscription:', error);
+      } else {
+        console.log(`[WEBHOOK] Subscription activated for user ${userId}`);
+      }
+      
+      return NextResponse.json({ received: true });
+    }
+    
+    // Handle payment checkout (deposit/remainder)
     const proposalId = session.metadata?.proposal_id;
     const paymentType = session.metadata?.payment_type || 'deposit';
     
@@ -159,11 +199,11 @@ export async function POST(request: NextRequest) {
       const { data: updated, error } = await supabaseAdmin
         .from('proposals')
         .update(updateData)
-        .eq('id', proposalId)
+      .eq('id', proposalId)
         .is('deposit_paid_at', null) // Idempotency check
         .select();
 
-      if (error) {
+    if (error) {
         console.error('[WEBHOOK] Error updating proposal:', error);
         return NextResponse.json({ error: 'Database update failed' }, { status: 500 });
       } else if (!updated || updated.length === 0) {
@@ -171,6 +211,66 @@ export async function POST(request: NextRequest) {
       } else {
         console.log(`[WEBHOOK] Deposit payment processed for proposal ${proposalId}${customerId ? ` (customer: ${customerId})` : ''}`);
       }
+    }
+  } else if (event.type === 'customer.subscription.created' || event.type === 'customer.subscription.updated') {
+    // Handle subscription created/updated
+    const subscription = event.data.object as Stripe.Subscription;
+    const userId = subscription.metadata?.user_id;
+
+    if (!userId) {
+      console.error('[WEBHOOK] No user_id in subscription metadata');
+      return NextResponse.json({ received: true, skipped: 'no_user_id' });
+    }
+
+    // Determine plan type from price
+    const priceId = subscription.items.data[0]?.price.id;
+    const planType = priceId === process.env.STRIPE_PRICE_ID_MONTHLY ? 'monthly' : 
+                     priceId === process.env.STRIPE_PRICE_ID_YEARLY ? 'yearly' : 
+                     subscription.metadata?.plan_type || 'monthly';
+
+    // Update subscription status
+    const { error } = await supabaseAdmin
+      .from('profiles')
+      .update({
+        subscription_plan: 'pro',
+        stripe_subscription_id: subscription.id,
+        subscription_status: subscription.status as any,
+        subscription_current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+        subscription_cancel_at_period_end: subscription.cancel_at_period_end ? true : false,
+      })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('[WEBHOOK] Error updating subscription:', error);
+    } else {
+      console.log(`[WEBHOOK] Subscription ${event.type} processed for user ${userId}`);
+    }
+  } else if (event.type === 'customer.subscription.deleted') {
+    // Handle subscription cancellation
+    const subscription = event.data.object as Stripe.Subscription;
+    const userId = subscription.metadata?.user_id;
+
+    if (!userId) {
+      console.error('[WEBHOOK] No user_id in subscription metadata');
+      return NextResponse.json({ received: true, skipped: 'no_user_id' });
+    }
+
+    // Downgrade to free plan
+    const { error } = await supabaseAdmin
+      .from('profiles')
+      .update({
+        subscription_plan: 'free',
+        subscription_status: 'canceled',
+        stripe_subscription_id: null,
+        subscription_current_period_end: null,
+        subscription_cancel_at_period_end: false,
+      })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('[WEBHOOK] Error canceling subscription:', error);
+    } else {
+      console.log(`[WEBHOOK] Subscription canceled for user ${userId}`);
     }
   }
 

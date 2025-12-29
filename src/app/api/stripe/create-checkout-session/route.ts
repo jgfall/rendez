@@ -51,10 +51,10 @@ export async function POST(request: NextRequest) {
       remainder_paid_at: string | null;
     };
 
-    // Get guide's profile with Stripe Connect info
+    // Get guide's profile with Stripe Connect info and subscription plan
     const { data: profile } = await supabase
       .from('profiles')
-      .select('currency, stripe_account_id, stripe_charges_enabled')
+      .select('currency, stripe_account_id, stripe_charges_enabled, subscription_plan')
       .eq('id', proposal.guide_id)
       .single();
 
@@ -73,12 +73,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Optional platform fee (in cents)
-    // Set via env var: STRIPE_PLATFORM_FEE_PERCENT (e.g., "2.9" for 2.9%)
-    // or STRIPE_PLATFORM_FEE_FIXED_CENTS (e.g., "30" for $0.30)
-    const platformFeePercent = process.env.STRIPE_PLATFORM_FEE_PERCENT 
-      ? parseFloat(process.env.STRIPE_PLATFORM_FEE_PERCENT) 
-      : null;
+    // Calculate platform fee based on subscription plan
+    // Free plans: 3% platform fee (on top of Stripe fees)
+    // Pro plans: 0% platform fee (only Stripe fees)
+    const subscriptionPlan = (profile?.subscription_plan || 'free') as 'free' | 'pro';
+    let platformFeePercent: number | null = null;
+    
+    if (subscriptionPlan === 'free') {
+      // Free plan: 3% platform fee
+      platformFeePercent = 3.0;
+    } else {
+      // Pro plan: no platform fee (can still use env var override if needed)
+      platformFeePercent = process.env.STRIPE_PLATFORM_FEE_PERCENT 
+        ? parseFloat(process.env.STRIPE_PLATFORM_FEE_PERCENT) 
+        : null;
+    }
+    
     const platformFeeFixedCents = process.env.STRIPE_PLATFORM_FEE_FIXED_CENTS
       ? parseInt(process.env.STRIPE_PLATFORM_FEE_FIXED_CENTS)
       : null;

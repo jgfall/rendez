@@ -111,6 +111,8 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [selectedPlan, setSelectedPlan] = useState<'free' | 'pro' | null>(null);
+  const [upgrading, setUpgrading] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -247,6 +249,7 @@ export default function OnboardingPage() {
           logo_url: uploadedLogoUrl,
           bio: bio.trim() || null,
           onboarding_completed: true,
+          subscription_plan: selectedPlan || 'free', // Set plan to free if not selected
         });
 
       if (dbError) {
@@ -263,11 +266,49 @@ export default function OnboardingPage() {
     }
   };
 
+  const handlePlanSelect = async (plan: 'free' | 'pro', billingPeriod: 'monthly' | 'yearly') => {
+    setSelectedPlan(plan);
+    
+    if (plan === 'pro') {
+      // Redirect to subscription checkout
+      setUpgrading(true);
+      try {
+        const response = await fetch('/api/stripe/create-subscription', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ planType: billingPeriod }),
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+          setError(data.error);
+          setUpgrading(false);
+          return;
+        }
+
+        if (data.url) {
+          window.location.href = data.url;
+        }
+      } catch (err) {
+        console.error('Failed to create subscription:', err);
+        setError('Failed to start checkout. Please try again.');
+        setUpgrading(false);
+      }
+    } else {
+      // Free plan - continue with onboarding
+      setStep('business-stage');
+    }
+  };
+
   const nextStep = () => {
     if (step === 'welcome') {
       setStep('pricing');
     } else if (step === 'pricing') {
+      // Plan selection is handled by handlePlanSelect
+      if (selectedPlan === 'free') {
       setStep('business-stage');
+      }
     } else if (step === 'business-stage' && businessStage) {
       setStep('profile');
     } else if (step === 'profile') {
@@ -378,21 +419,35 @@ export default function OnboardingPage() {
             </div>
 
             <div className="mb-6">
-              <PricingTable plans={pricingPlans} showHeader={false} showCTA={false} />
+              <PricingTable 
+                plans={pricingPlans} 
+                showHeader={false} 
+                showCTA={true}
+                onSelectPlan={handlePlanSelect}
+              />
             </div>
 
+            {upgrading && (
+              <div className="mb-6 p-4 rounded-xl bg-primary-50 border border-primary-200 text-center text-primary-700">
+                Redirecting to checkout...
+              </div>
+            )}
+
             <div className="flex gap-3">
-              <Button variant="outline" onClick={prevStep} className="flex-1">
+              <Button variant="outline" onClick={prevStep} className="flex-1" disabled={upgrading}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Button>
+              {selectedPlan === 'free' && (
               <Button 
                 onClick={nextStep} 
                 className="flex-1"
+                  disabled={upgrading}
               >
-                Continue
+                  Continue with Free
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
+              )}
             </div>
           </div>
         )}

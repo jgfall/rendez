@@ -37,3 +37,7 @@ export { Label, FieldGroup, FieldError, FormDescription, labelVariants, fieldGro
 export { default as PricingTable } from './modern-pricing-table';
 export type { Plan } from './modern-pricing-table';
 
+export { AnimatedGroup } from './animated-group';
+export { HeroSection } from './hero-section-1';
+export { DashboardShowcase } from './dashboard-showcase';
+

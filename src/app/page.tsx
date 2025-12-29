@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowRight, Map, Shield, Zap } from 'lucide-react';
-import { Button, Card, Logo, PricingTable, type Plan } from '@/components/ui';
+import { Button, Card, Logo, PricingTable, HeroSection, type Plan } from '@/components/ui';
 
 const pricingPlans: Plan[] = [
   {
@@ -13,7 +13,7 @@ const pricingPlans: Plan[] = [
     features: [
       "1 tour template",
       "Basic support",
-      "Stripe fees + 3%"
+      "3% fees on all transactions"
     ],
     ctaText: "Get Started",
     ctaHref: "/signup",
@@ -32,7 +32,7 @@ const pricingPlans: Plan[] = [
       "White label",
       "No added fees"
     ],
-    ctaText: "Upgrade to Pro",
+    ctaText: "Get Rendez Pro",
     ctaHref: "/signup?plan=pro",
     isFeatured: true
   }
@@ -42,54 +42,10 @@ export default function HomePage() {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <div className="relative overflow-hidden border-b border-sand-200/50">
-        {/* Background */}
-        <div className="absolute inset-0 -z-10">
-          <div className="absolute top-0 left-1/4 w-[800px] h-[800px] bg-primary-100/20 rounded-full blur-3xl" />
-          <div className="absolute bottom-0 right-1/4 w-[700px] h-[700px] bg-ocean-100/20 rounded-full blur-3xl" />
-        </div>
-
-        {/* Navigation */}
-        <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex items-center justify-between">
-          <Logo href="/" size="lg" />
-          <div className="flex items-center gap-3">
-            <Link href="/login">
-              <Button variant="ghost" size="md">Sign in</Button>
-            </Link>
-            <Link href="/signup">
-              <Button size="md">Get Started</Button>
-            </Link>
-          </div>
-        </nav>
-
-        {/* Hero content */}
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28 lg:py-32 text-center">
-          <h1 className="font-display text-7xl sm:text-8xl lg:text-9xl xl:text-[120px] font-light text-sand-900 leading-[1.1] mb-6 tracking-tight">
-            The #1 Way to Run 
-            <br />
-            <span className="gradient-text">Your Private Tour Business</span>
-          </h1>
-          <p className="text-lg sm:text-xl text-sand-600 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Create stunning, personalized tour proposals that convert. 
-            Impress your clients with professional itineraries and secure bookings with ease.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/signup">
-              <Button size="lg" icon={<ArrowRight className="h-5 w-5" />}>
-                Start Free Trial
-              </Button>
-            </Link>
-            <Link href="/login">
-              <Button size="lg" variant="outline">
-                View Demo
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
+      <HeroSection />
 
       {/* Features Section */}
-      <section className="py-20 sm:py-28 lg:py-32 px-4 sm:px-6 lg:px-8">
+      <section id="features" className="py-20 sm:py-28 lg:py-32 px-4 sm:px-6 lg:px-8 scroll-mt-20">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16 sm:mb-20">
             <p className="eyebrow mb-4">Features</p>
@@ -145,7 +101,7 @@ export default function HomePage() {
       </section>
 
       {/* Pricing Section */}
-      <section className="py-20 sm:py-28 lg:py-32 px-4 sm:px-6 lg:px-8 bg-sand-50/30">
+      <section id="pricing" className="py-20 sm:py-28 lg:py-32 px-4 sm:px-6 lg:px-8 bg-sand-50/30 scroll-mt-20">
         <PricingTable plans={pricingPlans} />
       </section>
 

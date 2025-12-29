@@ -5,6 +5,8 @@ export type BlockType = 'activity' | 'transport' | 'meal' | 'free_time' | 'accom
 export type ProposalStatus = 'draft' | 'sent' | 'viewed' | 'deposit_paid' | 'confirmed' | 'archived';
 export type PriceMode = 'per_person' | 'flat';
 export type BusinessStage = 'just_starting' | 'established';
+export type SubscriptionPlan = 'free' | 'pro';
+export type SubscriptionStatus = 'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete' | 'incomplete_expired' | 'unpaid';
 
 export interface Database {
   public: {
@@ -29,6 +31,12 @@ export interface Database {
           stripe_charges_enabled: boolean;
           stripe_payouts_enabled: boolean;
           stripe_onboarding_completed_at: string | null;
+          subscription_plan: SubscriptionPlan;
+          stripe_subscription_id: string | null;
+          stripe_customer_id: string | null;
+          subscription_status: SubscriptionStatus | null;
+          subscription_current_period_end: string | null;
+          subscription_cancel_at_period_end: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -49,6 +57,12 @@ export interface Database {
           stripe_charges_enabled?: boolean;
           stripe_payouts_enabled?: boolean;
           stripe_onboarding_completed_at?: string | null;
+          subscription_plan?: SubscriptionPlan;
+          stripe_subscription_id?: string | null;
+          stripe_customer_id?: string | null;
+          subscription_status?: SubscriptionStatus | null;
+          subscription_current_period_end?: string | null;
+          subscription_cancel_at_period_end?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -70,6 +84,12 @@ export interface Database {
           stripe_charges_enabled?: boolean;
           stripe_payouts_enabled?: boolean;
           stripe_onboarding_completed_at?: string | null;
+          subscription_plan?: SubscriptionPlan;
+          stripe_subscription_id?: string | null;
+          stripe_customer_id?: string | null;
+          subscription_status?: SubscriptionStatus | null;
+          subscription_current_period_end?: string | null;
+          subscription_cancel_at_period_end?: boolean;
           updated_at?: string;
         };
       };

@@ -96,10 +96,10 @@ export async function POST(request: NextRequest) {
     
     if (remainderCents && remainderCents > 0) {
       try {
-        // Get guide's profile for Stripe Connect and currency
+        // Get guide's profile for Stripe Connect, currency, and subscription plan
         const { data: profile } = await supabase
           .from('profiles')
-          .select('currency, stripe_account_id, stripe_charges_enabled')
+          .select('currency, stripe_account_id, stripe_charges_enabled, subscription_plan')
           .eq('id', user.id)
           .single();
 
@@ -337,12 +337,22 @@ export async function POST(request: NextRequest) {
             // If we have a payment method and customer ID, charge it directly
             if (paymentMethodId && customerId) {
               console.log(`[COMPLETE] Attempting to charge payment method ${paymentMethodId} for customer ${customerId || 'none'}`);
-              // Calculate platform fee if enabled
+              // Calculate platform fee based on subscription plan
               let applicationFeeAmount: number | undefined;
               if (useConnect && profile?.stripe_account_id) {
-                const platformFeePercent = process.env.STRIPE_PLATFORM_FEE_PERCENT 
-                  ? parseFloat(process.env.STRIPE_PLATFORM_FEE_PERCENT) 
-                  : null;
+                const subscriptionPlan = (profile?.subscription_plan || 'free') as 'free' | 'pro';
+                let platformFeePercent: number | null = null;
+                
+                if (subscriptionPlan === 'free') {
+                  // Free plan: 3% platform fee
+                  platformFeePercent = 3.0;
+                } else {
+                  // Pro plan: no platform fee (can still use env var override if needed)
+                  platformFeePercent = process.env.STRIPE_PLATFORM_FEE_PERCENT 
+                    ? parseFloat(process.env.STRIPE_PLATFORM_FEE_PERCENT) 
+                    : null;
+                }
+                
                 const platformFeeFixedCents = process.env.STRIPE_PLATFORM_FEE_FIXED_CENTS
                   ? parseInt(process.env.STRIPE_PLATFORM_FEE_FIXED_CENTS)
                   : null;
@@ -497,12 +507,22 @@ export async function POST(request: NextRequest) {
           .eq('id', proposal.tour_id)
           .single();
 
-        // Calculate platform fee if enabled
+        // Calculate platform fee based on subscription plan
         let applicationFeeAmount: number | undefined;
         if (useConnect && profile?.stripe_account_id) {
-          const platformFeePercent = process.env.STRIPE_PLATFORM_FEE_PERCENT 
+          const subscriptionPlan = (profile?.subscription_plan || 'free') as 'free' | 'pro';
+          let platformFeePercent: number | null = null;
+          
+          if (subscriptionPlan === 'free') {
+            // Free plan: 3% platform fee
+            platformFeePercent = 3.0;
+          } else {
+            // Pro plan: no platform fee (can still use env var override if needed)
+            platformFeePercent = process.env.STRIPE_PLATFORM_FEE_PERCENT 
             ? parseFloat(process.env.STRIPE_PLATFORM_FEE_PERCENT) 
             : null;
+          }
+          
           const platformFeeFixedCents = process.env.STRIPE_PLATFORM_FEE_FIXED_CENTS
             ? parseInt(process.env.STRIPE_PLATFORM_FEE_FIXED_CENTS)
             : null;

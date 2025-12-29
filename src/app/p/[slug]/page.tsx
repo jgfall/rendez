@@ -28,7 +28,7 @@ export default async function PublicProposalPage({ params }: PageProps) {
   let data, error;
   try {
     const result = await supabase
-      .rpc('get_public_proposal_by_slug', { slug_param: slug });
+    .rpc('get_public_proposal_by_slug', { slug_param: slug });
     data = result.data;
     error = result.error;
   } catch (err) {

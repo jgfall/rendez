@@ -67,7 +67,7 @@ const ScrollingNumber: React.FC<{ value: number }> = ({ value }) => {
   )
 }
 
-const PricingTable: React.FC<PricingTableProps> = ({ plans, showHeader = true, showCTA = true }) => {
+const PricingTable: React.FC<PricingTableProps> = ({ plans, showHeader = true, showCTA = true, onSelectPlan }) => {
   const [isYearly, setIsYearly] = useState(false)
 
   // Simple check icon for all features
@@ -285,6 +285,16 @@ const PricingTable: React.FC<PricingTableProps> = ({ plans, showHeader = true, s
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.8 + index * 0.1 }}
                 >
+                  {onSelectPlan ? (
+                    <Button
+                      onClick={() => onSelectPlan(plan.title.toLowerCase(), isYearly ? 'yearly' : 'monthly')}
+                      variant={plan.isFeatured ? "primary" : "outline"}
+                      size="lg"
+                      className="w-full"
+                    >
+                      {plan.ctaText}
+                    </Button>
+                  ) : (
                   <Button
                     asChild
                     variant={plan.isFeatured ? "primary" : "outline"}
@@ -295,6 +305,7 @@ const PricingTable: React.FC<PricingTableProps> = ({ plans, showHeader = true, s
                       {plan.ctaText}
                     </a>
                   </Button>
+                  )}
                 </motion.div>
               )}
             </div>
