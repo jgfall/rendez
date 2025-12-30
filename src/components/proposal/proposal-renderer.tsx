@@ -42,21 +42,25 @@ const BLOCK_COLORS: Record<BlockType, string> = {
 interface ProposalRendererProps {
   proposal: PublicProposal;
   isPreview?: boolean;
+  onRequestToBook?: () => void;
   onPayDeposit?: () => void;
   onPayRemainder?: () => void;
   remainderCents?: number | null;
   remainderPaidAt?: string | null;
   guideId?: string | null;
+  paymentLinkUrl?: string | null;
 }
 
 export function ProposalRenderer({ 
   proposal, 
   isPreview = false, 
+  onRequestToBook,
   onPayDeposit,
   onPayRemainder,
   remainderCents,
   remainderPaidAt,
   guideId,
+  paymentLinkUrl,
 }: ProposalRendererProps) {
   const { tour, client, blocks, guide, is_unlocked } = proposal;
   
@@ -255,14 +259,37 @@ export function ProposalRenderer({
           </div>
 
           {!is_unlocked && !isPreview && (
-            <Button 
-              className="w-full" 
-              size="lg"
-              onClick={onPayDeposit}
-              icon={<Sparkles className="h-4 w-4" />}
-            >
-              {`Reserve with ${formatPrice(proposal.deposit_cents / 100, currency)} Deposit`}
-            </Button>
+            <div className="space-y-3">
+              {paymentLinkUrl ? (
+                <>
+                  <Button 
+                    className="w-full" 
+                    size="lg"
+                    onClick={onPayDeposit}
+                    icon={<Sparkles className="h-4 w-4" />}
+                  >
+                    {`Pay ${formatPrice(proposal.deposit_cents / 100, currency)} Deposit`}
+                  </Button>
+                  <p className="text-xs text-sand-500 text-center">
+                    Once paid, your guide will confirm and share final details.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Button 
+                    className="w-full" 
+                    size="lg"
+                    onClick={onRequestToBook}
+                    icon={<Sparkles className="h-4 w-4" />}
+                  >
+                    Request to Book
+                  </Button>
+                  <p className="text-xs text-sand-500 text-center">
+                    Your guide will confirm and share payment details.
+                  </p>
+                </>
+              )}
+            </div>
           )}
 
           {is_unlocked && !hasRemainder && (
@@ -271,7 +298,7 @@ export function ProposalRenderer({
             </div>
           )}
 
-          {is_unlocked && hasRemainder && !remainderPaid && onPayRemainder && (
+          {is_unlocked && hasRemainder && !remainderPaid && onPayRemainder && paymentLinkUrl && (
             <div className="space-y-3">
               <div className="p-3 rounded-xl bg-warning-50 border border-warning-200 text-sm text-warning-700">
                 <p className="font-medium mb-1">Remaining Balance Due</p>

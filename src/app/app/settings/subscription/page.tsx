@@ -17,7 +17,7 @@ export default function SubscriptionPage() {
   const [loading, setLoading] = useState(true);
   const [subscriptionPlan, setSubscriptionPlan] = useState<SubscriptionPlan>('free');
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
-  const [stripeSubscriptionId, setStripeSubscriptionId] = useState<string | null>(null);
+  const [lsSubscriptionId, setLsSubscriptionId] = useState<string | null>(null);
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<string | null>(null);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -33,14 +33,14 @@ export default function SubscriptionPage() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('subscription_plan, subscription_status, stripe_subscription_id, subscription_current_period_end, subscription_cancel_at_period_end')
+        .select('subscription_plan, subscription_status, ls_subscription_id, subscription_current_period_end, subscription_cancel_at_period_end')
         .eq('id', user.id)
         .single();
 
       if (profile) {
         setSubscriptionPlan(profile.subscription_plan || 'free');
         setSubscriptionStatus(profile.subscription_status);
-        setStripeSubscriptionId(profile.stripe_subscription_id);
+        setLsSubscriptionId(profile.ls_subscription_id);
         setCurrentPeriodEnd(profile.subscription_current_period_end);
         setCancelAtPeriodEnd(profile.subscription_cancel_at_period_end || false);
       }
@@ -70,36 +70,23 @@ export default function SubscriptionPage() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('stripe_customer_id')
+        .select('ls_customer_id, ls_subscription_id')
         .eq('id', user.id)
         .single();
 
-      if (!profile?.stripe_customer_id) {
+      if (!profile?.ls_customer_id && !profile?.ls_subscription_id) {
         alert('No subscription found');
         setManagingSubscription(false);
         return;
       }
 
-      // Create Stripe customer portal session
-      const response = await fetch('/api/stripe/create-portal-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId: profile.stripe_customer_id }),
-      });
-
-      const data = await response.json();
-
-      if (data.error) {
-        alert(data.error);
-        setManagingSubscription(false);
-        return;
-      }
-
-      if (data.url) {
-        window.location.href = data.url;
-      }
+      // Redirect to Lemon Squeezy customer portal
+      // Format: https://[store].lemonsqueezy.com/my-orders
+      const storeSlug = process.env.NEXT_PUBLIC_LEMON_SQUEEZY_STORE_SLUG || 'rendez';
+      window.open(`https://${storeSlug}.lemonsqueezy.com/my-orders`, '_blank');
+      setManagingSubscription(false);
     } catch (err) {
-      console.error('Failed to create portal session:', err);
+      console.error('Failed to open subscription management:', err);
       alert('Failed to open subscription management. Please try again.');
       setManagingSubscription(false);
     }

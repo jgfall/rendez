@@ -20,7 +20,7 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
   const handleUpgrade = async (planType: 'monthly' | 'yearly') => {
     setLoading(true);
     try {
-      const response = await fetch('/api/stripe/create-subscription', {
+      const response = await fetch('/api/billing/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ planType }),

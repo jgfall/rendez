@@ -169,7 +169,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Integrate with Stripe Connect or other payment provider
+    // Note: Cash-out is handled externally by guides via their payment provider
+    // This endpoint is kept for future integration if needed
     // For now, we just create the payout record
     // In production, you would:
     // 1. For instant: Use Stripe Transfer to payment method

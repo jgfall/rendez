@@ -64,23 +64,15 @@ export function CompleteActions({
 
       const data = await response.json();
 
-      // If remainder was automatically charged, show success
-      if (data.remainderCharged) {
-        // Remainder was charged automatically - great!
-        setShowConfetti(true);
-        setShowSuccess(true);
-        router.refresh();
-      } else if (data.checkoutUrl) {
-        // Fallback: Open checkout in new tab for client to pay
-        window.open(data.checkoutUrl, '_blank');
-        setShowConfetti(true);
-        setShowSuccess(true);
-        router.refresh();
-      } else {
-        // No remainder or already paid
+      // Tour marked as complete
       setShowConfetti(true);
       setShowSuccess(true);
       router.refresh();
+      
+      // Show message if remainder payment is needed
+      if (data.remainderCents && data.remainderCents > 0 && !data.remainderPaid) {
+        // Note: Remainder payments are handled externally via guide's payment link
+        // This is just informational
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to mark complete');
@@ -114,10 +106,10 @@ export function CompleteActions({
             {displayRemainder > 0 && !remainderPaidAt && (
               <div className="mb-6 p-4 rounded-xl bg-warning-50 border border-warning-200">
                 <p className="text-warning-700 mb-2">
-                  ⚠️ Remainder payment of {formatPrice(displayRemainder, currency)} could not be charged automatically.
+                  ⚠️ Remainder payment of {formatPrice(displayRemainder, currency)} is still pending.
                 </p>
                 <p className="text-sm text-warning-600">
-                  A payment link has been opened in a new tab. Share this with your client to collect the remaining balance.
+                  Client can pay the remainder via your payment link. Once paid, you can mark it as received manually.
                 </p>
               </div>
             )}
@@ -226,10 +218,14 @@ export function CompleteActions({
             <div className="flex items-start gap-3">
               <CreditCard className="h-5 w-5 text-ocean-600 mt-0.5 shrink-0" />
               <div>
-                <p className="font-medium text-sand-900 mb-1">Billing Information</p>
+                <p className="font-medium text-sand-900 mb-1">Tour Completion</p>
                 <p className="text-sm text-sand-700">
-                  When you mark this tour as complete, the remainder payment of{' '}
-                  <strong>{formatPrice(displayRemainder, currency)}</strong> will be automatically charged to the card on file for this customer.
+                  Marking this tour as complete will finalize the booking. 
+                  {displayRemainder > 0 && !remainderPaidAt && (
+                    <>
+                      {' '}The remainder payment of <strong>{formatPrice(displayRemainder, currency)}</strong> can be collected via your payment link.
+                    </>
+                  )}
                 </p>
               </div>
             </div>
@@ -257,7 +253,7 @@ export function CompleteActions({
               className="flex-1"
               icon={<CheckCircle2 className="h-4 w-4" />}
             >
-              Mark Complete & Charge Card
+              Mark Complete
             </Button>
           </div>
         </div>

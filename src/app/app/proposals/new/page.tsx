@@ -58,10 +58,10 @@ export default function NewProposalPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Get user profile for currency, deposit percentage, and payment status
+      // Get user profile for currency and deposit percentage
       const { data: profile } = await supabase
         .from('profiles')
-        .select('currency, deposit_percentage, stripe_account_id, stripe_charges_enabled')
+        .select('currency, deposit_percentage, payment_link_url')
         .eq('id', user.id)
         .single();
       
@@ -73,10 +73,8 @@ export default function NewProposalPage() {
         setDepositPercentage(profile.deposit_percentage);
       }
 
-      // Check if payments are enabled
-      setPaymentsEnabled(
-        !!(profile?.stripe_account_id && profile?.stripe_charges_enabled)
-      );
+      // Check if payment link is set (for showing payment options)
+      setPaymentsEnabled(!!profile?.payment_link_url);
 
       const { data } = await supabase
         .from('tour_templates')
@@ -743,10 +741,10 @@ export default function NewProposalPage() {
                   <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-amber-900 mb-1">
-                      Payments Not Enabled
+                      Payment Link Not Set
                     </p>
                     <p className="text-sm text-amber-700 mb-3">
-                      Connect Stripe to accept deposits. Guests won't be able to pay until you enable payments.
+                      Set a payment link in your profile settings. Clients will use this to pay deposits.
                     </p>
                     <Button
                       type="button"
@@ -755,7 +753,7 @@ export default function NewProposalPage() {
                       onClick={() => router.push('/app/profile')}
                       icon={<CreditCard className="h-4 w-4" />}
                     >
-                      Connect Stripe
+                      Set Payment Link
                     </Button>
                   </div>
                 </div>
@@ -763,8 +761,8 @@ export default function NewProposalPage() {
             )}
             {paymentsEnabled && (
               <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-700">
-                <p className="font-medium">✓ Payments enabled</p>
-                <p className="text-xs mt-1">Deposit collected by Stripe. Funds go directly to you.</p>
+                <p className="font-medium">✓ Payment link configured</p>
+                <p className="text-xs mt-1">Clients can pay deposits using your payment link.</p>
               </div>
             )}
             {selectedTour?.base_price_cents && (

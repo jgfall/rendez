@@ -2,13 +2,10 @@ import { createClient } from '@/lib/supabase/server';
 import { Card, Button } from '@/components/ui';
 import { formatPrice } from '@/lib/utils';
 import { RevenueChart } from '@/components/revenue/revenue-chart';
-import { StripeDashboardCard } from '@/components/revenue/stripe-dashboard-card';
 import { 
   DollarSign, 
   TrendingUp, 
-  CreditCard,
-  ArrowLeft,
-  ExternalLink
+  ArrowLeft
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -23,15 +20,14 @@ export default async function RevenuePage() {
     return null;
   }
 
-  // Get user currency and Stripe Connect status
+  // Get user currency
   const { data: profile } = await supabase
     .from('profiles')
-    .select('currency, stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled')
+    .select('currency')
     .eq('id', user.id)
     .single();
 
   const currency = profile?.currency || 'USD';
-  const paymentsEnabled = !!(profile?.stripe_account_id && profile?.stripe_charges_enabled);
 
   // Fetch all proposals with payments
   const { data: proposals } = await supabase
@@ -126,29 +122,6 @@ export default async function RevenuePage() {
         </div>
       </div>
 
-      {/* Stripe Connect Status */}
-      {!paymentsEnabled && (
-        <Card variant="outlined" padding="lg" className="bg-amber-50 border-amber-200">
-          <div className="flex items-start gap-4">
-            <div className="h-12 w-12 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-              <CreditCard className="h-6 w-6 text-amber-600" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-display text-lg font-semibold text-amber-900 mb-1">
-                Connect Stripe to Accept Payments
-              </h3>
-              <p className="text-sm text-amber-700 mb-4">
-                Funds go directly to your Stripe account. Connect your account to start receiving payments.
-              </p>
-              <Link href="/app/profile">
-                <Button variant="outline" size="sm" icon={<CreditCard className="h-4 w-4" />}>
-                  Connect Stripe
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </Card>
-      )}
 
       {/* Summary Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -186,28 +159,6 @@ export default async function RevenuePage() {
           </div>
         </Card>
 
-        {paymentsEnabled && (
-          <Card variant="elevated" padding="md">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <p className="text-sm text-sand-500 mb-1">Stripe Account</p>
-                <p className="font-display text-lg font-semibold text-sand-900 mb-2">
-                  {profile?.stripe_payouts_enabled ? 'Active' : 'Pending'}
-                </p>
-                <Link 
-                  href="/api/stripe/connect/create-account-link"
-                  className="text-xs text-primary-600 hover:text-primary-700 flex items-center gap-1"
-                >
-                  Manage in Stripe
-                  <ExternalLink className="h-3 w-3" />
-                </Link>
-              </div>
-              <div className="h-12 w-12 rounded-xl bg-ocean-100 flex items-center justify-center">
-                <CreditCard className="h-6 w-6 text-ocean-600" />
-              </div>
-            </div>
-          </Card>
-        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -268,10 +219,6 @@ export default async function RevenuePage() {
         </Card>
       </div>
 
-      {/* Stripe Connect Info */}
-      {paymentsEnabled && (
-        <StripeDashboardCard />
-      )}
     </div>
   );
 }

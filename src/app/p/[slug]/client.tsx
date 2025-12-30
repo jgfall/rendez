@@ -11,6 +11,7 @@ interface PublicProposalClientProps {
   remainderCents?: number | null;
   remainderPaidAt?: string | null;
   guideId?: string | null;
+  paymentLinkUrl?: string | null;
 }
 
 export function PublicProposalClient({ 
@@ -19,6 +20,7 @@ export function PublicProposalClient({
   remainderCents,
   remainderPaidAt,
   guideId,
+  paymentLinkUrl,
 }: PublicProposalClientProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -37,17 +39,13 @@ export function PublicProposalClient({
     trackView();
   }, [slug]);
 
-  const handlePayDeposit = async () => {
+  const handleRequestToBook = async () => {
     setLoading(true);
     try {
-      // Only use test mode if explicitly requested via query param
-      // This allows testing real Stripe Checkout even in development
-      const isTest = new URLSearchParams(window.location.search).get('test') === 'true';
-
-      const response = await fetch('/api/stripe/create-checkout-session', {
+      // Request to book - sends a message/notification to the guide
+      const response = await fetch(`/api/proposals/${slug}/request-booking`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, isTest }),
       });
 
       const data = await response.json();
@@ -57,55 +55,43 @@ export function PublicProposalClient({
         return;
       }
 
-      if (data.url) {
-        window.location.href = data.url;
-      }
+      alert('Booking request sent! Your guide will confirm and share payment details.');
     } catch (err) {
-      console.error('Failed to create checkout session:', err);
-      alert('Failed to start checkout. Please try again.');
+      console.error('Failed to send booking request:', err);
+      alert('Failed to send booking request. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePayRemainder = async () => {
-    setLoading(true);
-    try {
-      // Only use test mode if explicitly requested via query param
-      const isTest = new URLSearchParams(window.location.search).get('test') === 'true';
+  const handlePayDeposit = () => {
+    // This will open the guide's payment link in a new tab
+    if (paymentLinkUrl) {
+      window.open(paymentLinkUrl, '_blank');
+    } else {
+      alert('Payment link not available. Please contact your guide.');
+    }
+  };
 
-      const response = await fetch('/api/stripe/create-checkout-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, isTest, isRemainder: true }),
-      });
-
-      const data = await response.json();
-
-      if (data.error) {
-        alert(data.error);
-        return;
-      }
-
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch (err) {
-      console.error('Failed to create remainder checkout session:', err);
-      alert('Failed to start checkout. Please try again.');
-    } finally {
-      setLoading(false);
+  const handlePayRemainder = () => {
+    // This will open the guide's payment link in a new tab
+    if (paymentLinkUrl) {
+      window.open(paymentLinkUrl, '_blank');
+    } else {
+      alert('Payment link not available. Please contact your guide.');
     }
   };
 
   return (
     <ProposalRenderer
       proposal={proposal}
+      onRequestToBook={handleRequestToBook}
       onPayDeposit={handlePayDeposit}
       onPayRemainder={handlePayRemainder}
       remainderCents={remainderCents}
       remainderPaidAt={remainderPaidAt}
       guideId={guideId}
+      paymentLinkUrl={paymentLinkUrl}
     />
   );
 }

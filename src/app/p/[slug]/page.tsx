@@ -76,6 +76,17 @@ export default async function PublicProposalPage({ params }: PageProps) {
     console.error('Error fetching proposal data:', proposalError);
   }
 
+  // Fetch guide's payment link URL
+  let paymentLinkUrl: string | null = null;
+  if (proposalData?.guide_id) {
+    const { data: guideProfile } = await supabase
+      .from('profiles')
+      .select('payment_link_url')
+      .eq('id', proposalData.guide_id)
+      .single();
+    paymentLinkUrl = guideProfile?.payment_link_url || null;
+  }
+
   // Track view (will be called from client component)
   return (
     <PublicProposalClient 
@@ -84,6 +95,7 @@ export default async function PublicProposalPage({ params }: PageProps) {
       remainderCents={proposalData?.remainder_cents || null}
       remainderPaidAt={proposalData?.remainder_paid_at || null}
       guideId={proposalData?.guide_id || null}
+      paymentLinkUrl={paymentLinkUrl}
     />
   );
 }

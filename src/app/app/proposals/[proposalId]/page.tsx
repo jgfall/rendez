@@ -7,6 +7,7 @@ import { Button, Card, Badge, ProposalStatusBadge } from '@/components/ui';
 import { formatPrice } from '@/lib/utils';
 import { CopyActions } from './copy-actions';
 import { CompleteActions } from './complete-actions';
+import { ConfirmActions } from './confirm-actions';
 
 interface PageProps {
   params: Promise<{ proposalId: string }>;
@@ -28,14 +29,17 @@ export default async function ProposalDetailPage({ params }: PageProps) {
     .eq('guide_id', user!.id)
     .single();
 
+  // Check if proposal is unlocked (either via deposit_paid_at or manual_unlock)
+  const isUnlocked = proposal?.deposit_paid_at !== null || proposal?.manual_unlock === true;
+
   if (!proposal) {
     notFound();
   }
 
-  // Get user currency
+  // Get user currency and profile info
   const { data: profile } = await supabase
     .from('profiles')
-    .select('currency')
+    .select('currency, business_name, full_name')
     .eq('id', user!.id)
     .single();
 
@@ -163,6 +167,8 @@ export default async function ProposalDetailPage({ params }: PageProps) {
             proposalUrl={proposalUrl}
             clientName={proposal.client?.name || ''}
             tourName={proposal.tour?.name || ''}
+            clientEmail={proposal.client?.email}
+            guideName={profile?.business_name || profile?.full_name || undefined}
           />
         </Card>
 
@@ -170,41 +176,36 @@ export default async function ProposalDetailPage({ params }: PageProps) {
         {proposal.deposit_paid_at && (
           <Card variant="elevated" padding="lg" className="lg:col-span-2 bg-emerald-50 border-emerald-200">
             <h2 className="font-display text-xl font-semibold text-emerald-900 mb-2">
-              💰 Deposit Paid
+              💰 Deposit Received
             </h2>
             <p className="text-emerald-700">
               {formatPrice(proposal.deposit_cents / 100, currency)} received on{' '}
               {format(new Date(proposal.deposit_paid_at), 'MMMM d, yyyy h:mm a')}
             </p>
-            <p className="text-sm text-emerald-600 mt-2">
-              Payment processed via Stripe Connect. Funds go directly to your Stripe account.
-            </p>
-            {proposal.stripe_payment_intent_id && (
-              <p className="text-xs text-emerald-500 mt-1 font-mono">
-                Payment ID: {proposal.stripe_payment_intent_id}
-              </p>
-            )}
           </Card>
         )}
 
         {proposal.remainder_paid_at && (
           <Card variant="elevated" padding="lg" className="lg:col-span-2 bg-emerald-50 border-emerald-200">
             <h2 className="font-display text-xl font-semibold text-emerald-900 mb-2">
-              ✅ Remainder Paid
+              ✅ Remainder Received
             </h2>
             <p className="text-emerald-700">
               {formatPrice((proposal.remainder_cents || 0) / 100, currency)} received on{' '}
               {format(new Date(proposal.remainder_paid_at), 'MMMM d, yyyy h:mm a')}
             </p>
-            <p className="text-sm text-emerald-600 mt-2">
-              Payment processed via Stripe Connect. Funds go directly to your Stripe account.
-            </p>
-            {proposal.stripe_remainder_payment_intent_id && (
-              <p className="text-xs text-emerald-500 mt-1 font-mono">
-                Payment ID: {proposal.stripe_remainder_payment_intent_id}
-              </p>
-            )}
           </Card>
+        )}
+
+        {/* Confirm Actions - Manual Confirmation */}
+        {!proposal.deposit_paid_at && (
+          <div className="lg:col-span-2">
+            <ConfirmActions
+              proposalId={proposal.id}
+              depositPaid={proposal.deposit_paid_at !== null}
+              isUnlocked={isUnlocked}
+            />
+          </div>
         )}
 
         {/* Complete Actions - Client Component */}
