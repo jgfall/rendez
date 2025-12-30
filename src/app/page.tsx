@@ -1,3 +1,7 @@
+'use client';
+
+import { useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight, Map, Shield, Zap } from 'lucide-react';
 import { Button, Card, Logo, PricingTable, HeroSection, type Plan } from '@/components/ui';
@@ -38,7 +42,20 @@ const pricingPlans: Plan[] = [
   }
 ];
 
-export default function HomePage() {
+function HomePageContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const code = searchParams.get('code');
+
+  // Handle OAuth callback if code is present
+  useEffect(() => {
+    if (code) {
+      // Redirect to the callback route with all search params
+      const params = new URLSearchParams(searchParams.toString());
+      router.replace(`/auth/callback?${params.toString()}`);
+    }
+  }, [code, searchParams, router]);
+
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
@@ -135,5 +152,17 @@ export default function HomePage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-4 border-primary-500 border-t-transparent rounded-full" />
+      </div>
+    }>
+      <HomePageContent />
+    </Suspense>
   );
 }

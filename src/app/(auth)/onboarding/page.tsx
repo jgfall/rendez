@@ -16,7 +16,7 @@ import {
   X
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { Button, Input, Textarea, Select, Card, Logo, PricingTable, type Plan } from '@/components/ui';
+import { Button, Input, Textarea, Select, Card, Logo } from '@/components/ui';
 import type { BusinessStage } from '@/types/database';
 
 const timezones = [
@@ -54,43 +54,7 @@ const currencies = [
   { value: 'NZD', label: 'NZD - New Zealand Dollar (NZ$)' },
 ];
 
-type Step = 'welcome' | 'pricing' | 'business-stage' | 'profile' | 'business-details';
-
-const pricingPlans: Plan[] = [
-  {
-    title: "Free",
-    price: {
-      monthly: 0,
-      yearly: 0
-    },
-    description: "Perfect for getting started",
-    features: [
-      "1 tour template",
-      "Basic support",
-      "Stripe fees + 3%"
-    ],
-    ctaText: "Get Started",
-    ctaHref: "/signup",
-    isFeatured: false
-  },
-  {
-    title: "Pro",
-    price: {
-      monthly: 29,
-      yearly: 278 // $29 * 12 * 0.8 (20% discount for yearly billing)
-    },
-    description: "For growing businesses",
-    features: [
-      "Unlimited templates",
-      "Customization",
-      "White label",
-      "No added fees"
-    ],
-    ctaText: "Upgrade to Pro",
-    ctaHref: "/signup?plan=pro",
-    isFeatured: true
-  }
-];
+type Step = 'welcome' | 'business-stage' | 'profile' | 'business-details';
 
 export default function OnboardingPage() {
   const [step, setStep] = useState<Step>('welcome');
@@ -111,8 +75,7 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
-  const [selectedPlan, setSelectedPlan] = useState<'free' | 'pro' | null>(null);
-  const [upgrading, setUpgrading] = useState(false);
+  const [selectedPlan] = useState<'free' | 'pro'>('free'); // Always start with free
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -249,7 +212,7 @@ export default function OnboardingPage() {
           logo_url: uploadedLogoUrl,
           bio: bio.trim() || null,
           onboarding_completed: true,
-          subscription_plan: selectedPlan || 'free', // Set plan to free if not selected
+          subscription_plan: selectedPlan, // Always free for new accounts
         });
 
       if (dbError) {
@@ -266,49 +229,10 @@ export default function OnboardingPage() {
     }
   };
 
-  const handlePlanSelect = async (plan: 'free' | 'pro', billingPeriod: 'monthly' | 'yearly') => {
-    setSelectedPlan(plan);
-    
-    if (plan === 'pro') {
-      // Redirect to subscription checkout
-      setUpgrading(true);
-      try {
-        const response = await fetch('/api/stripe/create-subscription', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ planType: billingPeriod }),
-        });
-
-        const data = await response.json();
-
-        if (data.error) {
-          setError(data.error);
-          setUpgrading(false);
-          return;
-        }
-
-        if (data.url) {
-          window.location.href = data.url;
-        }
-      } catch (err) {
-        console.error('Failed to create subscription:', err);
-        setError('Failed to start checkout. Please try again.');
-        setUpgrading(false);
-      }
-    } else {
-      // Free plan - continue with onboarding
-      setStep('business-stage');
-    }
-  };
 
   const nextStep = () => {
     if (step === 'welcome') {
-      setStep('pricing');
-    } else if (step === 'pricing') {
-      // Plan selection is handled by handlePlanSelect
-      if (selectedPlan === 'free') {
       setStep('business-stage');
-      }
     } else if (step === 'business-stage' && businessStage) {
       setStep('profile');
     } else if (step === 'profile') {
@@ -323,10 +247,8 @@ export default function OnboardingPage() {
   };
 
   const prevStep = () => {
-    if (step === 'pricing') {
+    if (step === 'business-stage') {
       setStep('welcome');
-    } else if (step === 'business-stage') {
-      setStep('pricing');
     } else if (step === 'profile') {
       setStep('business-stage');
     } else if (step === 'business-details') {
@@ -336,7 +258,6 @@ export default function OnboardingPage() {
 
   const canProceed = () => {
     if (step === 'welcome') return true;
-    if (step === 'pricing') return true;
     if (step === 'business-stage') return businessStage !== null;
     if (step === 'profile') return fullName.trim().length > 0;
     if (step === 'business-details') return businessName.trim().length > 0;
@@ -351,12 +272,11 @@ export default function OnboardingPage() {
     );
   }
 
-  const totalSteps = businessStage === 'established' ? 5 : 4;
+  const totalSteps = businessStage === 'established' ? 4 : 3;
   const currentStepNumber = 
     step === 'welcome' ? 1 : 
-    step === 'pricing' ? 2 :
-    step === 'business-stage' ? 3 : 
-    step === 'profile' ? 4 : 5;
+    step === 'business-stage' ? 2 : 
+    step === 'profile' ? 3 : 4;
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12">
@@ -403,52 +323,6 @@ export default function OnboardingPage() {
             >
               Let&apos;s get started
             </Button>
-          </div>
-        )}
-
-        {/* Step: Pricing */}
-        {step === 'pricing' && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-500">
-            <div className="text-center mb-8">
-              <h1 className="font-display text-3xl font-light text-sand-900 mb-2">
-                Choose Your Plan
-              </h1>
-              <p className="text-sand-600">
-                Start free, upgrade anytime
-              </p>
-            </div>
-
-            <div className="mb-6">
-              <PricingTable 
-                plans={pricingPlans} 
-                showHeader={false} 
-                showCTA={true}
-                onSelectPlan={handlePlanSelect}
-              />
-            </div>
-
-            {upgrading && (
-              <div className="mb-6 p-4 rounded-xl bg-primary-50 border border-primary-200 text-center text-primary-700">
-                Redirecting to checkout...
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={prevStep} className="flex-1" disabled={upgrading}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
-              {selectedPlan === 'free' && (
-              <Button 
-                onClick={nextStep} 
-                className="flex-1"
-                  disabled={upgrading}
-              >
-                  Continue with Free
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-              )}
-            </div>
           </div>
         )}
 

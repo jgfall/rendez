@@ -251,7 +251,10 @@ export default function ProfilePage() {
 
       if (!createLinkRes.ok) {
         const errorData = await createLinkRes.json();
-        throw new Error(errorData.error || 'Failed to create account link');
+        const errorMessage = errorData.details 
+          ? `${errorData.error}: ${errorData.details}`
+          : errorData.error || 'Failed to create account link';
+        throw new Error(errorMessage);
       }
 
       const { url } = await createLinkRes.json();
@@ -283,7 +286,10 @@ export default function ProfilePage() {
 
       if (!createLinkRes.ok) {
         const errorData = await createLinkRes.json();
-        throw new Error(errorData.error || 'Failed to create account link');
+        const errorMessage = errorData.details 
+          ? `${errorData.error}: ${errorData.details}`
+          : errorData.error || 'Failed to create account link';
+        throw new Error(errorMessage);
       }
 
       const { url } = await createLinkRes.json();
@@ -298,11 +304,49 @@ export default function ProfilePage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('stripe_return') || params.get('stripe_refresh')) {
-      // Refresh profile data to get updated Stripe status
-      const fetchProfile = async () => {
+      // Sync Stripe status from Stripe API (more reliable than waiting for webhook)
+      const syncStripeStatus = async () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
+        try {
+          // First, try to sync status from Stripe
+          const syncRes = await fetch('/api/stripe/connect/sync-status', {
+            method: 'POST',
+          });
+
+          if (syncRes.ok) {
+            // Status synced, now fetch updated profile
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted')
+              .eq('id', user.id)
+              .single();
+
+            if (profile) {
+              setStripeAccountId(profile.stripe_account_id || null);
+              setStripeChargesEnabled(profile.stripe_charges_enabled || false);
+              setStripePayoutsEnabled(profile.stripe_payouts_enabled || false);
+              setStripeDetailsSubmitted(profile.stripe_details_submitted || false);
+            }
+          } else {
+            // Fallback: just fetch profile without syncing
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted')
+              .eq('id', user.id)
+              .single();
+
+            if (profile) {
+              setStripeAccountId(profile.stripe_account_id || null);
+              setStripeChargesEnabled(profile.stripe_charges_enabled || false);
+              setStripePayoutsEnabled(profile.stripe_payouts_enabled || false);
+              setStripeDetailsSubmitted(profile.stripe_details_submitted || false);
+            }
+          }
+        } catch (err) {
+          console.error('Error syncing Stripe status:', err);
+          // Still try to fetch profile
         const { data: profile } = await supabase
           .from('profiles')
           .select('stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted')
@@ -314,13 +358,14 @@ export default function ProfilePage() {
           setStripeChargesEnabled(profile.stripe_charges_enabled || false);
           setStripePayoutsEnabled(profile.stripe_payouts_enabled || false);
           setStripeDetailsSubmitted(profile.stripe_details_submitted || false);
+          }
         }
 
         // Clean up URL
         window.history.replaceState({}, '', '/app/profile');
       };
 
-      fetchProfile();
+      syncStripeStatus();
     }
   }, [supabase]);
 

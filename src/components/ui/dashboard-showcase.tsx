@@ -27,11 +27,57 @@ export function DashboardShowcase({
     // Dashboard layout matching the screenshot structure with absolute positioning and z-index
     return (
       <div className={cn('relative mt-8 overflow-visible px-2 sm:mt-12 md:mt-20', className)}>
+        {/* Mobile-only single image */}
+        <motion.div 
+          className="md:hidden relative w-full overflow-visible"
+          initial="hidden"
+          animate="visible"
+          variants={{
+            hidden: { opacity: 0 },
+            visible: {
+              opacity: 1,
+              transition: {
+                staggerChildren: 0.15,
+                delayChildren: 0.2,
+              },
+            },
+          }}
+        >
+          <motion.div 
+            className="relative w-full flex justify-end"
+            variants={{
+              hidden: { opacity: 0, y: 40, scale: 0.94 },
+              visible: {
+                opacity: 1,
+                y: 0,
+                scale: 1,
+                transition: {
+                  type: 'spring',
+                  bounce: 0.2,
+                  duration: 1,
+                },
+              },
+            }}
+          >
+            <Image
+              src="/mobile-feature.png"
+              alt="Mobile feature showcase"
+              width={1200}
+              height={800}
+              className="w-full object-contain"
+              priority
+              unoptimized
+            />
+          </motion.div>
+        </motion.div>
+
+        {/* Desktop layout - hidden on mobile */}
+        <div className="hidden md:block">
         <div
           aria-hidden
           className="bg-gradient-to-b to-background absolute inset-0 z-10 from-transparent from-35% pointer-events-none"
         />
-        <div className="relative w-full min-h-[1000px]">
+          <div className="relative w-full min-h-[1000px]">
           <motion.div
             initial="hidden"
             animate="visible"
@@ -167,6 +213,7 @@ export function DashboardShowcase({
               </motion.div>
             )}
           </motion.div>
+        </div>
         </div>
       </div>
     );

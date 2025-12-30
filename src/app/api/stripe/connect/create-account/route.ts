@@ -6,11 +6,21 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export async function POST(request: NextRequest) {
   try {
+    // Check for Stripe secret key
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.error('STRIPE_SECRET_KEY is not set');
+      return NextResponse.json(
+        { error: 'Stripe is not configured' },
+        { status: 500 }
+      );
+    }
+
     const supabase = await createClient();
     
     // Get authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
+      console.error('Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -55,7 +65,9 @@ export async function POST(request: NextRequest) {
     const country = countryMap[currency] || 'US';
 
     // Create Express account
-    const account = await stripe.accounts.create({
+    let account: Stripe.Account;
+    try {
+      account = await stripe.accounts.create({
       type: 'express',
       country: country as any,
       capabilities: {
@@ -64,6 +76,16 @@ export async function POST(request: NextRequest) {
       },
       email: user.email || undefined,
     });
+    } catch (stripeError: any) {
+      console.error('Stripe API error:', stripeError);
+      return NextResponse.json(
+        { 
+          error: 'Failed to create Stripe account',
+          details: stripeError.message || 'Unknown Stripe error'
+        },
+        { status: 500 }
+      );
+    }
 
     // Store account ID in database
     const { error: updateError } = await supabase
@@ -80,10 +102,13 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ stripe_account_id: account.id });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating Stripe account:', error);
     return NextResponse.json(
-      { error: 'Failed to create Stripe account' },
+      { 
+        error: 'Failed to create Stripe account',
+        details: error?.message || 'Unknown error'
+      },
       { status: 500 }
     );
   }
